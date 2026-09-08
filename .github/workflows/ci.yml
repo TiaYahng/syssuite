@@ -1,0 +1,38 @@
+﻿name: ci
+
+on:
+  push:
+    branches: [ main, dev ]
+  pull_request:
+
+jobs:
+  dotnet:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+      - run: pwsh ./rules/Check-SourceFileSize.ps1
+      - run: dotnet restore
+      - run: dotnet build --no-restore -c Release /warnaserror
+      - run: dotnet test --no-build -c Release --logger trx
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: dotnet-test-results
+          path: '**/*.trx'
+  native:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: microsoft/setup-msbuild@v2
+      - run: cmake -S src/SysSuite.Native -B build -A x64
+      - run: cmake --build build --config Release
+      - run: cmake -S tests/SysSuite.Native.Tests -B build-native -A x64
+      - run: cmake --build build-native --config Release
+      - run: ctest --test-dir build-native -C Release --output-on-failure
+      - uses: actions/upload-artifact@v4
+        with:
+          name: SysSuite.Native
+          path: build/Release/SysSuite.Native.dll

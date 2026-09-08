@@ -1,0 +1,12 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/SysSuite.Core.Abstractions/SysSuite.Core.Abstractions.csproj" />
+    <Project Path="src/SysSuite.Core/SysSuite.Core.csproj" />
+    <Project Path="src/SysSuite.Interop/SysSuite.Interop.csproj" />
+    <Project Path="src/SysSuite.UI/SysSuite.UI.csproj" />
+    <Project Path="src/SysSuite.Watchdog/SysSuite.Watchdog.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/SysSuite.Tests/SysSuite.Tests.csproj" />
+  </Folder>
+</Solution>

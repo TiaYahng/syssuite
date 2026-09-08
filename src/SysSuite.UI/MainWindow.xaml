@@ -1,0 +1,95 @@
+﻿<Window x:Class="SysSuite.UI.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="SysSuite" Height="680" Width="1100" MinHeight="620" MinWidth="900"
+        WindowStartupLocation="CenterScreen"
+        WindowStyle="None" SourceInitialized="OnSourceInitialized"
+        Background="{DynamicResource App.Background}">
+    <WindowChrome.WindowChrome>
+        <WindowChrome CaptionHeight="48" ResizeBorderThickness="6" CornerRadius="0" GlassFrameThickness="0" UseAeroCaptionButtons="False" />
+    </WindowChrome.WindowChrome>
+    <Window.Resources>
+        <Style x:Key="TitleBarButton" TargetType="Button">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="Foreground" Value="{DynamicResource App.Text}" />
+            <Setter Property="Padding" Value="0" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="ButtonRoot" Background="{TemplateBinding Background}" CornerRadius="6">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="ButtonRoot" Property="Background" Value="{DynamicResource App.Hover}" />
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="ButtonRoot" Property="Background" Value="{DynamicResource App.Border}" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+    </Window.Resources>
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="48" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="32" />
+        </Grid.RowDefinitions>
+
+        <Border x:Name="TitleBar" Grid.Row="0" Background="{DynamicResource App.Background}" BorderBrush="{DynamicResource App.Border}" BorderThickness="0,0,0,1">
+            <Grid>
+                <StackPanel WindowChrome.IsHitTestVisibleInChrome="True" Orientation="Horizontal" Margin="12,0">
+                    <Button x:Name="HamburgerButton" Style="{StaticResource TitleBarButton}" Width="34" Height="32" AutomationProperties.Name="菜单">
+                        <TextBlock Text="☰" FontSize="16" Foreground="{DynamicResource App.Text}" />
+                    </Button>
+                    <TextBlock Text="SysSuite" FontSize="16" FontWeight="SemiBold" VerticalAlignment="Center" Margin="10,0,0,0" Foreground="{StaticResource App.Text}" />
+                    <Button x:Name="LayoutButton" Style="{StaticResource TitleBarButton}" Width="34" Height="32" Margin="8,0,0,0" Click="OnToggleLayout" ToolTip="水平导航/侧边栏" AutomationProperties.Name="切换布局" />
+                </StackPanel>
+                <Border WindowChrome.IsHitTestVisibleInChrome="True" HorizontalAlignment="Center" Width="360" Height="32" Background="{DynamicResource App.Background}" BorderBrush="{DynamicResource App.Border}" BorderThickness="1" CornerRadius="6">
+                    <Grid>
+                        <TextBox x:Name="SearchBox" Margin="8,0" VerticalAlignment="Center" BorderThickness="0" Background="Transparent" Foreground="{DynamicResource App.Text}" />
+                        <TextBlock Text="Ctrl+K" HorizontalAlignment="Right" Margin="8,0" VerticalAlignment="Center" Foreground="{DynamicResource App.SubtleText}" />
+                    </Grid>
+                </Border>
+                <StackPanel WindowChrome.IsHitTestVisibleInChrome="True" HorizontalAlignment="Right" Orientation="Horizontal" Margin="0,0,12,0">
+                    <Button Style="{StaticResource TitleBarButton}" Width="34" Height="32" Click="OnAccountClick" ToolTip="登录" AutomationProperties.Name="登录"><TextBlock Text="👤" FontSize="16" Foreground="{DynamicResource App.Text}" /></Button>
+                    <Button Style="{StaticResource TitleBarButton}" Width="34" Height="32" Click="OnThemeClick" ToolTip="切换主题" AutomationProperties.Name="切换主题"><TextBlock Text="◐" FontSize="16" Foreground="{DynamicResource App.Text}" /></Button>
+                    <Button Style="{StaticResource TitleBarButton}" Width="34" Height="32" Click="OnDiagnosticsClick" ToolTip="导出诊断" AutomationProperties.Name="导出诊断"><TextBlock Text="🧪" FontSize="16" Foreground="{DynamicResource App.Text}" /></Button>
+                    <Button Style="{StaticResource TitleBarButton}" Width="34" Height="32" Click="OnSettingsClick" ToolTip="设置" AutomationProperties.Name="设置"><TextBlock Text="⚙" FontSize="16" Foreground="{DynamicResource App.Text}" /></Button>
+                    <Button Style="{StaticResource TitleBarButton}" Width="38" Height="32" Click="OnMinimize" ToolTip="最小化" AutomationProperties.Name="最小化"><TextBlock Text="—" FontSize="14" Foreground="{DynamicResource App.Text}" /></Button>
+                    <Button Style="{StaticResource TitleBarButton}" Width="38" Height="32" Click="OnMaximize" ToolTip="最大化" AutomationProperties.Name="最大化"><TextBlock Text="□" FontSize="14" Foreground="{DynamicResource App.Text}" /></Button>
+                    <Button Style="{StaticResource TitleBarButton}" Width="38" Height="32" Click="OnClose" ToolTip="关闭" AutomationProperties.Name="关闭"><TextBlock Text="✕" FontSize="14" Foreground="{DynamicResource App.Text}" /></Button>
+                </StackPanel>
+            </Grid>
+        </Border>
+
+        <ScrollViewer x:Name="RibbonContainer" Grid.Row="1" Background="{StaticResource App.Surface}" BorderBrush="{StaticResource App.Border}" BorderThickness="0,0,0,1" Visibility="Collapsed" HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled">
+            <StackPanel x:Name="RibbonPanel" Orientation="Horizontal" Margin="8,4" HorizontalAlignment="Center" VerticalAlignment="Center" />
+        </ScrollViewer>
+
+        <Grid Grid.Row="2">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition x:Name="LeftSidebarColumn" Width="150" />
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition x:Name="RightSidebarColumn" Width="0" />
+            </Grid.ColumnDefinitions>
+            <Border x:Name="SidebarHost" Grid.Column="0" Background="{StaticResource App.Surface}" BorderBrush="{StaticResource App.Border}" BorderThickness="0,0,1,0" PreviewMouseLeftButtonDown="OnSidebarPreviewMouseDown">
+                <StackPanel x:Name="SidebarPanel" Margin="8" />
+            </Border>
+            <ContentControl x:Name="PageHost" Grid.Column="1" Margin="16,24" />
+        </Grid>
+
+        <Border Grid.Row="3" Background="{DynamicResource App.Background}" BorderBrush="{DynamicResource App.Border}" BorderThickness="0,1,0,0">
+            <DockPanel Margin="12,0">
+                <TextBlock x:Name="StatusText" Text="" Visibility="Collapsed" VerticalAlignment="Center" Foreground="{DynamicResource App.Text}" />
+                <ProgressBar x:Name="TaskProgress" Width="160" Height="8" VerticalAlignment="Center" Margin="16,0" />
+                <Button x:Name="NativeSelfCheckButton" DockPanel.Dock="Right" Content="Native 自检" HorizontalAlignment="Right" Padding="10,2" Background="{DynamicResource App.Accent}" Foreground="{DynamicResource App.AccentText}" Click="OnNativeSelfCheck" />
+            </DockPanel>
+        </Border>
+    </Grid>
+</Window>
