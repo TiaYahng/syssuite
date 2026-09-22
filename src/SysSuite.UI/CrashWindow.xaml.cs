@@ -28,7 +28,7 @@ public partial class CrashWindow : Window
     {
         var diagnostics = ((App)Application.Current).Services.GetRequiredService<IDiagnosticsService>();
         var result = diagnostics.ExportLogs();
-        ExceptionTextBox.Text = result.IsSuccess ? "???????" : result.Message;
+        ExceptionTextBox.Text = result.IsSuccess ? "诊断包导出成功。" : result.Message;
     }
 
     private void OnContinue(object sender, RoutedEventArgs e) => Close();

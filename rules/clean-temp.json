@@ -1,0 +1,83 @@
+[
+  {
+    "id": "windows-temp",
+    "target": "{root}\\Windows\\Temp",
+    "env": ["WINDIR"],
+    "regex": ".*",
+    "exclude": ["\\\\(Low|Package Cache)\\\\", "\\Windows\\\\WinSxS"],
+    "minAgeDays": 1,
+    "level": "safe"
+  },
+  {
+    "id": "root-temp",
+    "target": "{root}\\Temp",
+    "env": [],
+    "regex": ".*",
+    "exclude": [],
+    "minAgeDays": 1,
+    "level": "caution"
+  },
+  {
+    "id": "programdata-temp",
+    "target": "{root}\\ProgramData\\Temp",
+    "env": [],
+    "regex": ".*",
+    "exclude": [],
+    "minAgeDays": 1,
+    "level": "caution"
+  },
+  {
+    "id": "user-temp",
+    "target": "{root}\\Users\\*\\AppData\\Local\\Temp",
+    "env": ["TEMP", "TMP"],
+    "regex": ".*",
+    "exclude": [],
+    "minAgeDays": 1,
+    "level": "caution"
+  },
+  {
+    "id": "chrome-cache",
+    "target": "{root}\\Users\\*\\AppData\\Local\\Google\\Chrome\\User Data\\*\\Cache",
+    "env": [],
+    "regex": ".*",
+    "exclude": [],
+    "minAgeDays": 7,
+    "level": "caution"
+  },
+  {
+    "id": "edge-cache",
+    "target": "{root}\\Users\\*\\AppData\\Local\\Microsoft\\Edge\\User Data\\*\\Cache",
+    "env": [],
+    "regex": ".*",
+    "exclude": [],
+    "minAgeDays": 7,
+    "level": "caution"
+  },
+  {
+    "id": "firefox-cache",
+    "target": "{root}\\Users\\*\\AppData\\Local\\Mozilla\\Firefox\\Profiles\\*\\cache2",
+    "env": [],
+    "regex": ".*",
+    "exclude": [],
+    "minAgeDays": 7,
+    "level": "caution"
+  },
+  {
+    "id": "thumbnails",
+    "target": "{root}\\Users\\*\\AppData\\Local\\Microsoft\\Windows\\Explorer",
+    "env": [],
+    "regex": ".*thumbcache_.*\\.db$",
+    "exclude": [],
+    "minAgeDays": 7,
+    "level": "caution"
+  },
+  {
+    "id": "error-reports",
+    "target": "{root}\\ProgramData\\Microsoft\\Windows\\WER",
+    "env": [],
+    "regex": ".*",
+    "exclude": [],
+    "minAgeDays": 7,
+    "level": "caution"
+  }
+]

@@ -1,0 +1,25 @@
+{
+  "schemaVersion": 1,
+  "profiles": [
+    {
+      "stableKey": "mysql-service",
+      "name": "MySQL Server",
+      "publisher": "Oracle Corporation",
+      "version": null,
+      "serviceName": "MySQL",
+      "installDirectories": [
+        "C:\\Program Files\\MySQL"
+      ],
+      "sourceNote": "人工审核：Windows 服务或标准安装目录"
+    },
+    {
+      "stableKey": "clash-verge-service",
+      "name": "Clash Verge Service",
+      "publisher": "Clash Verge",
+      "version": null,
+      "serviceName": "clash_verge_service",
+      "installDirectories": [],
+      "sourceNote": "人工审核：第三方辅助服务"
+    }
+  ]
+}

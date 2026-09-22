@@ -15,24 +15,26 @@ jobs:
           dotnet-version: 8.0.x
       - run: pwsh ./rules/Check-SourceFileSize.ps1
       - run: dotnet restore
-      - run: dotnet build --no-restore -c Release /warnaserror
-      - run: dotnet test --no-build -c Release --logger trx
+      - run: dotnet build --no-restore -c Debug /warnaserror
+      # 原生模块：先构建再部署到测试输出目录，让 C# FFI 冒烟真正执行（否则自动 Skip）
+      # 刻意使用 Build-Native.ps1 而非 cmake —— 后者依赖 CMake 生成器探测，
+      # 在部分 VS 安装上会以 "No CMAKE_CXX_COMPILER could be found" 失败。
+      - name: 构建并部署原生模块 (x64)
+        run: pwsh ./rules/Build-Native.ps1 -Configuration Release -Deploy
+      - run: dotnet test --no-build -c Debug --logger trx
       - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: dotnet-test-results
           path: '**/*.trx'
+
   native:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: microsoft/setup-msbuild@v2
-      - run: cmake -S src/SysSuite.Native -B build -A x64
-      - run: cmake --build build --config Release
-      - run: cmake -S tests/SysSuite.Native.Tests -B build-native -A x64
-      - run: cmake --build build-native --config Release
-      - run: ctest --test-dir build-native -C Release --output-on-failure
-      - uses: actions/upload-artifact@v4
-        with:
-          name: SysSuite.Native
-          path: build/Release/SysSuite.Native.dll
+      - name: 配置并构建 ABI 契约测试
+        run: |
+          cmake -S tests/SysSuite.Native.Tests -B build/native-tests -A x64
+          cmake --build build/native-tests --config Release
+      - name: 运行 Catch2 测试
+        run: ctest --test-dir build/native-tests -C Release --output-on-failure

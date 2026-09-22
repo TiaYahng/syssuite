@@ -43,12 +43,29 @@ public partial class MainWindow : Window
         var icon = new TextBlock
         {
             Text = item.Icon,
-            FontSize = display == NavDisplay.Ribbon ? 18 : display == NavDisplay.Icon ? 18 : 15,
+            FontFamily = new System.Windows.Media.FontFamily("Segoe UI Emoji"),
+            FontSize = display == NavDisplay.Icon ? 14 : 12,
+            FontWeight = FontWeights.ExtraLight,
             HorizontalAlignment = HorizontalAlignment.Center,
             TextAlignment = TextAlignment.Center
         };
+        icon.Margin = display switch
+        {
+            NavDisplay.Ribbon => new Thickness(0, 0, 0, -4),
+            NavDisplay.Full => new Thickness(0, 0, 0, 0),
+            _ => new Thickness(0)
+        };
         object content;
-        if (display == NavDisplay.Icon)
+        if (display == NavDisplay.Ribbon)
+        {
+            content = new TextBlock
+            {
+                Text = item.Title,
+                FontSize = 14,
+                TextAlignment = TextAlignment.Center
+            };
+        }
+        else if (display == NavDisplay.Icon)
         {
             content = icon;
         }
@@ -58,10 +75,11 @@ public partial class MainWindow : Window
             var panel = display == NavDisplay.Ribbon
                 ? new StackPanel { Children = { icon, title } }
                 : new StackPanel { Orientation = Orientation.Horizontal, Children = { icon, title } };
+            panel.Margin = display == NavDisplay.Ribbon ? new Thickness(0) : new Thickness(0, 0, 3, 0);
 
             if (display == NavDisplay.Full)
             {
-                panel.Margin = new Thickness(0, 0, 6, 0);
+                panel.Margin = new Thickness(0, 0, 3, 0);
             }
 
             content = panel;
@@ -73,22 +91,32 @@ public partial class MainWindow : Window
             Content = content,
             Width = display switch
             {
-                NavDisplay.Ribbon => 84,
+                NavDisplay.Ribbon => double.NaN,
                 NavDisplay.Icon => 36,
                 _ => 108
             },
             Height = display switch
             {
-                NavDisplay.Ribbon => 56,
+                NavDisplay.Ribbon => 32,
                 _ => 36
             },
-            Margin = display == NavDisplay.Icon ? new Thickness(0, 0, 0, 4) : new Thickness(0, 0, 4, 4),
+            Margin = display switch
+            {
+                NavDisplay.Icon => new Thickness(0, 0, 0, 4),
+                NavDisplay.Ribbon => new Thickness(0, 0, 0, 0),
+                _ => new Thickness(0, 0, 4, 4)
+            },
             HorizontalContentAlignment = display == NavDisplay.Full ? HorizontalAlignment.Left : HorizontalAlignment.Center,
             VerticalContentAlignment = VerticalAlignment.Center,
             Background = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromArgb(0, 0, 0, 0)),
             BorderThickness = new Thickness(0),
             Cursor = Cursors.Hand,
-            Padding = display == NavDisplay.Icon ? new Thickness(0) : new Thickness(8),
+            Padding = display switch
+            {
+                NavDisplay.Icon => new Thickness(0),
+                NavDisplay.Ribbon => new Thickness(8, 3, 8, 3),
+                _ => new Thickness(8)
+            },
             ToolTip = item.Title
         };
         button.Click += OnNavClick;
@@ -106,49 +134,59 @@ public partial class MainWindow : Window
     private void NavigateTo(NavItem item)
     {
         PageHost.Content = navigationService.GetPage(item.Page);
-        StatusText.Text = item.Title;
+        UpdateNavigationSelection(item.Page);
     }
 
+    private void UpdateNavigationSelection(NavPage currentPage)
+    {
+        foreach (var button in RibbonPanel.Children.OfType<Button>().Concat(SidebarPanel.Children.OfType<Button>()))
+        {
+            var isSelected = button.Tag is NavItem item && item.Page == currentPage;
+            button.SetResourceReference(Button.BackgroundProperty, isSelected ? "App.Accent" : "App.Transparent");
+            button.SetResourceReference(Button.BorderBrushProperty, isSelected ? "App.Accent" : "App.Transparent");
+            button.SetResourceReference(Button.ForegroundProperty, isSelected ? "App.AccentText" : "App.Text");
+            button.BorderThickness = new Thickness(isSelected ? 1 : 0);
+        }
+    }
     private void OnSourceInitialized(object? sender, EventArgs args)
     {
         var hwnd = new WindowInteropHelper(this).Handle;
         var cornerPreference = 2;
         _ = DwmSetWindowAttribute(hwnd, 33, ref cornerPreference, sizeof(int));
+        var source = HwndSource.FromHwnd(hwnd);
+        source?.AddHook(WndProc);
     }
 
-    private void BindStatusBar()
+    private void OnLayoutButtonClick(object sender, RoutedEventArgs args)
     {
-        var taskManager = BackgroundTaskManager.Current;
-        TaskProgress.DataContext = taskManager;
-        TaskProgress.SetBinding(RangeBase.ValueProperty, new Binding(nameof(BackgroundTaskManager.ProgressPercent))
+        var menu = new ContextMenu();
+        var modes = new[] { (UiLayout.Ribbon, "水平"), (UiLayout.Sidebar, "左侧"), (UiLayout.RightSidebar, "右侧") };
+        foreach (var (layout, title) in modes)
         {
-            Mode = BindingMode.OneWay
-        });
-        TaskProgress.SetBinding(VisibilityProperty, new Binding(nameof(BackgroundTaskManager.CancelCommand))
-        {
-            Converter = new BooleanToVisibilityConverter()
-        });
-    }
-
-    private void OnTitleBarMouseDown(object sender, MouseButtonEventArgs args)
-    {
-        if (args.ChangedButton == MouseButton.Left && args.ButtonState == MouseButtonState.Pressed)
-        {
-            DragMove();
+            var menuItem = new MenuItem
+            {
+                Header = title,
+                Tag = layout,
+                IsCheckable = true,
+                IsChecked = layout == currentLayout
+            };
+            menuItem.Click += OnLayoutModeClick;
+            menu.Items.Add(menuItem);
         }
+
+        menu.PlacementTarget = LayoutButton;
+        menu.Placement = PlacementMode.Bottom;
+        menu.IsOpen = true;
     }
 
-    private void OnToggleLayout(object sender, RoutedEventArgs args)
+    private void OnLayoutModeClick(object sender, RoutedEventArgs args)
     {
-        var layout = currentLayout switch
+        if (sender is MenuItem { Tag: UiLayout layout } && layout != currentLayout)
         {
-            UiLayout.Ribbon => UiLayout.RightSidebar,
-            UiLayout.RightSidebar => UiLayout.Sidebar,
-            _ => UiLayout.Ribbon
-        };
-        ApplyLayout(layout);
-        settingsService.Current.UiLayout = layout.ToString();
-        settingsService.SaveDebounced();
+            ApplyLayout(layout);
+            settingsService.Current.UiLayout = layout.ToString();
+            settingsService.SaveDebounced();
+        }
     }
 
     private void OnSidebarPreviewMouseDown(object sender, MouseButtonEventArgs args)
@@ -193,22 +231,55 @@ public partial class MainWindow : Window
         var isRight = layout is UiLayout.RightSidebar or UiLayout.RightSidebarIcons;
         var isIcon = layout is UiLayout.SidebarIcons or UiLayout.RightSidebarIcons;
         var sidebarWidth = isIcon ? new GridLength(46) : new GridLength(118);
-        LeftSidebarColumn.Width = !isRight ? sidebarWidth : new GridLength(0);
+        LeftSidebarColumn.Width = layout == UiLayout.Ribbon || isRight ? new GridLength(0) : sidebarWidth;
         RightSidebarColumn.Width = isRight ? sidebarWidth : new GridLength(0);
         Grid.SetColumn(SidebarHost, isRight ? 2 : 0);
         SidebarHost.BorderThickness = isRight ? new Thickness(1, 0, 0, 0) : new Thickness(0, 0, 1, 0);
         RibbonContainer.Visibility = layout == UiLayout.Ribbon ? Visibility.Visible : Visibility.Collapsed;
         SidebarHost.Visibility = layout == UiLayout.Ribbon ? Visibility.Collapsed : Visibility.Visible;
+        PageHost.HorizontalAlignment = HorizontalAlignment.Stretch;
+        PageHost.VerticalAlignment = VerticalAlignment.Stretch;
+        PageHost.HorizontalContentAlignment = HorizontalAlignment.Stretch;
+        PageHost.VerticalContentAlignment = VerticalAlignment.Stretch;
+        PageHost.MaxWidth = double.PositiveInfinity;
         SidebarPanel.Margin = isIcon ? new Thickness(4) : new Thickness(8);
-        var arrow = new TextBlock
-        {
-            Text = layout is UiLayout.Sidebar or UiLayout.SidebarIcons ? "←" :
-                layout is UiLayout.RightSidebar or UiLayout.RightSidebarIcons ? "→" : "↑",
-            FontSize = 16
-        };
-        arrow.SetResourceReference(TextBlock.ForegroundProperty, "App.Text");
-        LayoutButton.Content = arrow;
+        LayoutButton.Content = CreateLayoutIcon(layout);
         BuildNavigation(layout);
+        UpdateNavigationSelection(navigationService.CurrentPage);
+    }
+
+    private static System.Windows.Controls.Grid CreateLayoutIcon(UiLayout layout)
+    {
+        var grid = new System.Windows.Controls.Grid { Width = 14, Height = 14 };
+        grid.ColumnDefinitions.Add(new System.Windows.Controls.ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        grid.ColumnDefinitions.Add(new System.Windows.Controls.ColumnDefinition { Width = new GridLength(2) });
+        grid.ColumnDefinitions.Add(new System.Windows.Controls.ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        grid.RowDefinitions.Add(new System.Windows.Controls.RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
+        grid.RowDefinitions.Add(new System.Windows.Controls.RowDefinition { Height = new GridLength(2) });
+        grid.RowDefinitions.Add(new System.Windows.Controls.RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
+
+        for (var row = 0; row < 3; row += 2)
+        {
+            for (var column = 0; column < 3; column += 2)
+            {
+                var tile = new System.Windows.Controls.Border { CornerRadius = new CornerRadius(2) };
+                if (row == 2 && column == 2)
+                {
+                    tile.SetResourceReference(System.Windows.Controls.Border.BackgroundProperty, "App.Accent");
+                    Grid.SetRow(tile, row);
+                    Grid.SetColumn(tile, column);
+                    grid.Children.Add(tile);
+                    continue;
+                }
+
+                tile.SetResourceReference(System.Windows.Controls.Border.BackgroundProperty, "App.Text");
+                Grid.SetRow(tile, row);
+                Grid.SetColumn(tile, column);
+                grid.Children.Add(tile);
+            }
+        }
+
+        return grid;
     }
 
 }

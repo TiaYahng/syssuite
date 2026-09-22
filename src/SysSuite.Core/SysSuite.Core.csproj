@@ -1,4 +1,4 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
   <ItemGroup>
     <ProjectReference Include="..\SysSuite.Core.Abstractions\SysSuite.Core.Abstractions.csproj" />
@@ -7,8 +7,15 @@
 
   <ItemGroup>
     <PackageReference Include="Serilog" />
+    <PackageReference Include="Microsoft.Data.Sqlite" />
     <PackageReference Include="Serilog.Sinks.File" />
     <PackageReference Include="System.Management" />
+    <PackageReference Include="System.Drawing.Common" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="Data\known-software-profiles.json" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="..\..\rules\clean-temp.json" Link="rules\clean-temp.json" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
   <PropertyGroup>
@@ -17,4 +24,7 @@
     <Nullable>enable</Nullable>
   </PropertyGroup>
 
+  <ItemGroup>
+    <InternalsVisibleTo Include="SysSuite.Tests" />
+  </ItemGroup>
 </Project>

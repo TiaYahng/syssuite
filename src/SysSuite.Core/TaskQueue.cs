@@ -92,7 +92,6 @@ public sealed class TaskCoordinator : IAsyncDisposable
 
         disposed = true;
         queue.Writer.TryComplete();
-        await cancellation.CancelAsync();
         try
         {
             await worker;
@@ -102,6 +101,7 @@ public sealed class TaskCoordinator : IAsyncDisposable
         }
         finally
         {
+            await cancellation.CancelAsync();
             cancellation.Dispose();
             executorLock.Dispose();
         }

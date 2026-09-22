@@ -1,7 +1,21 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <!-- P/Invoke 缓冲区与函数指针互操作需要 unsafe 上下文 -->
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
   </PropertyGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="SysSuite.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- 便于开发期定位原生源码；不参与编译 -->
+    <None Include="..\SysSuite.Native\include\native_api.h" Link="native\native_api.h" />
+    <None Include="..\SysSuite.Native\CMakeLists.txt" Link="native\CMakeLists.txt" />
+  </ItemGroup>
 
 </Project>

@@ -21,17 +21,18 @@ public partial class MainWindow : Window
 
     private sealed record NavItem(NavPage Page, string Icon, string Title);
 
+    private static readonly NavItem SettingsNavItem = new(NavPage.Settings, "⚙️", "设置");
+
     private static readonly NavItem[] NavItems =
     [
         new(NavPage.Dashboard, "🏠", "仪表盘"),
         new(NavPage.SystemInfo, "💻", "系统信息"),
         new(NavPage.Cleaner, "🧹", "磁盘清理"),
-        new(NavPage.Uninstaller, "📦", "卸载器"),
+        new(NavPage.Uninstaller, "📦", "应用管理"),
         new(NavPage.Security, "🛡️", "安全中心"),
         new(NavPage.Desktop, "🖼️", "桌面整理"),
         new(NavPage.SoftwareHub, "🔄", "软件管家"),
-        new(NavPage.Toolbox, "🧰", "工具箱"),
-        new(NavPage.Settings, "⚙️", "设置")
+        new(NavPage.Toolbox, "🧰", "工具箱")
     ];
 
     private readonly INavigationService navigationService;
@@ -44,12 +45,12 @@ public partial class MainWindow : Window
         var services = ((App)Application.Current).Services;
         navigationService = services.GetRequiredService<INavigationService>();
         settingsService = services.GetRequiredService<ISettingsService>();
-        BindStatusBar();
         ApplyLayout(Enum.TryParse(settingsService.Current.UiLayout, out UiLayout layout) ? layout : UiLayout.Sidebar);
         var savedTheme = Enum.TryParse(settingsService.Current.Theme, out AppTheme theme) ? theme : AppTheme.System;
         ApplyTheme(savedTheme, false);
         NavigateTo(NavItems[0]);
         PreviewKeyDown += OnPreviewKeyDown;
+        StateChanged += OnStateChanged;
     }
 
     private void OnThemeClick(object sender, RoutedEventArgs args)
@@ -62,12 +63,12 @@ public partial class MainWindow : Window
             _ => AppTheme.System
         };
         ApplyTheme(nextTheme, true);
-        StatusText.Text = $"主题：{nextTheme}";
     }
 
     private void ApplyTheme(AppTheme theme, bool persist)
     {
         ThemeService.Apply(theme);
+        UpdateNavigationSelection(navigationService.CurrentPage);
         if (persist)
         {
             settingsService.Current.Theme = theme.ToString();
@@ -83,28 +84,17 @@ public partial class MainWindow : Window
         {
             settingsService.Current.AccountEmail = dialog.Email;
             settingsService.SaveDebounced();
-            StatusText.Text = string.IsNullOrWhiteSpace(dialog.Email) ? "已退出登录" : "已保存账户";
         }
     }
 
-    private void OnDiagnosticsClick(object sender, RoutedEventArgs args)
+    private void OnStateChanged(object? sender, EventArgs args)
     {
-        var diagnostics = ((App)Application.Current).Services.GetRequiredService<IDiagnosticsService>();
-        diagnostics.CaptureCrashDump(new InvalidOperationException("Manual diagnostic dump"));
-        var result = diagnostics.ExportLogs();
-        StatusText.Text = result.IsSuccess ? "诊断包已导出" : result.Message;
+        MaximizeIcon.Text = WindowState == WindowState.Maximized ? "\uE923" : "\uE922";
     }
 
     private void OnSettingsClick(object sender, RoutedEventArgs args)
     {
-        NavigateTo(NavItems[8]);
-    }
-
-    private void OnNativeSelfCheck(object sender, RoutedEventArgs args)
-    {
-        var nativeBridge = ((App)Application.Current).Services.GetRequiredService<INativeBridge>();
-        var result = nativeBridge.GetVersion();
-        StatusText.Text = result.Success ? $"Native {result.Version}" : $"Native 不可用：{result.ErrorMessage}";
+        NavigateTo(SettingsNavItem);
     }
 
     private void OnPreviewKeyDown(object sender, KeyEventArgs args)

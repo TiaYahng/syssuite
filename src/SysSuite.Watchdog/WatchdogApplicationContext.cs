@@ -36,14 +36,14 @@ internal sealed class WatchdogApplicationContext : ApplicationContext
         };
 
         var menu = new ContextMenuStrip();
-        menu.Items.Add("?????", null, (_, _) => OpenMainApp());
-        menu.Items.Add("????", null, (_, _) =>
+        menu.Items.Add("打开主程序", null, (_, _) => OpenMainApp());
+        menu.Items.Add("暂停监控", null, (_, _) =>
         {
             paused = !paused;
-            icon.Text = paused ? "SysSuite Watchdog?????" : "SysSuite Watchdog";
+            icon.Text = paused ? "SysSuite Watchdog 已暂停" : "SysSuite Watchdog";
         });
         menu.Items.Add(new ToolStripSeparator());
-        menu.Items.Add("??", null, (_, _) => _ = ExitAsync());
+        menu.Items.Add("退出", null, (_, _) => _ = ExitAsync());
         icon.ContextMenuStrip = menu;
         icon.DoubleClick += (_, _) => OpenMainApp();
 

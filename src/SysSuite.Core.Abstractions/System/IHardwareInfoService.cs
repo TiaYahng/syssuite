@@ -13,6 +13,7 @@ public sealed record HardwareInfo
     public ulong TotalPhysicalMemory { get; init; }
     public IReadOnlyList<StorageInfo> Storage { get; init; } = [];
     public IReadOnlyList<DriveInfo> Drives { get; init; } = [];
+    public IReadOnlyList<GraphicsCardInfo> GraphicsCards { get; init; } = [];
     public IReadOnlyList<NetworkAdapterInfo> NetworkAdapters { get; init; } = [];
 }
 
@@ -30,6 +31,14 @@ public sealed record DriveInfo(
 }
 
 public sealed record NetworkAdapterInfo(string Name, string MacAddress, bool IsEnabled);
+
+public sealed record GraphicsCardInfo(
+    string Name,
+    string Manufacturer,
+    ulong MemoryBytes,
+    string DriverVersion,
+    string VideoModeDescription,
+    string CategoryDescription);
 
 public interface IHardwareInfoService
 {

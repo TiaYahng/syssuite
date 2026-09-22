@@ -1,8 +1,11 @@
+using System.IO;
 using System.Windows;
 using Microsoft.Extensions.DependencyInjection;
 using Serilog;
 using SysSuite.Core;
 using SysSuite.Core.Abstractions;
+using SysSuite.Core.Abstractions.Data;
+using SysSuite.Core.Data;
 using SysSuite.Core.Diagnostics;
 using SysSuite.Core.Settings;
 using SysSuite.Core.System;
@@ -21,14 +24,14 @@ public partial class App : Application, IDisposable
         instanceMutex = new Mutex(true, @"Local\SysSuite.UI", out var isFirstInstance);
         if (!isFirstInstance)
         {
-            MessageBox.Show("SysSuite ?????", "SysSuite", MessageBoxButton.OK, MessageBoxImage.Information);
+            MessageBox.Show("SysSuite 已经在运行。", "SysSuite", MessageBoxButton.OK, MessageBoxImage.Information);
             Shutdown();
             return;
         }
 
         if (!Environment.IsPrivilegedProcess)
         {
-            MessageBox.Show("SysSuite ????????????????", "SysSuite", MessageBoxButton.OK, MessageBoxImage.Information);
+            MessageBox.Show("SysSuite 需要以管理员权限运行。", "SysSuite", MessageBoxButton.OK, MessageBoxImage.Information);
             Shutdown();
             return;
         }
@@ -43,11 +46,19 @@ public partial class App : Application, IDisposable
         var services = new ServiceCollection();
         services.AddSingleton(diagnostics);
         services.AddSingleton<IDiagnosticsService>(diagnostics);
-        services.AddSingleton<INativeBridge, NativeBridge>();
+        services.AddSingleton<ISharedDatabaseService>(_ => new SharedDatabaseService(
+            Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "SysSuite", "syssuite.db")));
+        services.AddSingleton<IUninstallEnumerationService, UninstallEnumerationService>();
+        services.AddSingleton<IIconCacheService, IconCacheService>();
+        services.AddSingleton<IUninstallService, UninstallService>();
+        services.AddSingleton<ILeftoverScanner, LeftoverScanner>();
+        services.AddSingleton<IForceDeleteService, ForceDeleteService>();
+        services.AddSingleton<IAppChangeMonitor, AppChangeMonitor>();
         services.AddSingleton<INavigationService, NavigationService>();
         services.AddSingleton<ISettingsService, SettingsService>();
         services.AddSingleton<IHardwareInfoService, WmiHardwareInfoService>();
         services.AddSingleton<IMonitorService, PerformanceMonitorService>();
+        services.AddSingleton<IDiskInspectionService, DiskInspectionService>();
         Services = services.BuildServiceProvider();
 
         base.OnStartup(e);

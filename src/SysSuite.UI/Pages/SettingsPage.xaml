@@ -1,21 +1,47 @@
-<UserControl x:Class="SysSuite.UI.Pages.SettingsPage"
+﻿<UserControl x:Class="SysSuite.UI.Pages.SettingsPage"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
-    <Border Background="{StaticResource App.Surface}" BorderBrush="{StaticResource App.Border}" BorderThickness="1" CornerRadius="8" Padding="24" Width="720">
+    <Border Background="{DynamicResource App.Surface}" BorderBrush="{DynamicResource App.Border}" BorderThickness="1" CornerRadius="8" Padding="24" HorizontalAlignment="Stretch" VerticalAlignment="Stretch">
         <StackPanel>
-            <TextBlock Text="??" FontSize="28" FontWeight="SemiBold" Foreground="{StaticResource App.Text}" />
-            <TextBlock Text="???????????" Margin="0,8,0,0" TextWrapping="Wrap" Foreground="{StaticResource App.SubtleText}" />
-            <Border Margin="0,20,0,0" Padding="16" Background="{StaticResource App.Background}" BorderBrush="{StaticResource App.Border}" BorderThickness="1" CornerRadius="6">
+            <TextBlock Text="设置" FontSize="24" FontWeight="SemiBold" Foreground="{DynamicResource App.Text}" />
+            <TextBlock Text="管理应用行为与系统集成选项。" Margin="0,6,0,0" TextWrapping="Wrap" Foreground="{DynamicResource App.SubtleText}" />
+            <Border Margin="0,20,0,0" Padding="16" Background="{DynamicResource App.Background}" BorderBrush="{DynamicResource App.Border}" BorderThickness="1" CornerRadius="6">
                 <Grid>
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="*" />
                         <ColumnDefinition Width="Auto" />
                     </Grid.ColumnDefinitions>
                     <StackPanel>
-                        <TextBlock Text="Watchdog ????" Foreground="{StaticResource App.Text}" />
-                        <TextBlock Text="?????? HKCU Run?Watchdog ??????" Foreground="{StaticResource App.SubtleText}" TextWrapping="Wrap" />
+                        <TextBlock Text="Watchdog 开机自启" Foreground="{DynamicResource App.Text}" />
+                        <TextBlock Text="写入 HKCU Run，使 Watchdog 随系统启动。" Foreground="{DynamicResource App.SubtleText}" TextWrapping="Wrap" />
                     </StackPanel>
                     <CheckBox x:Name="WatchdogAutoStartCheckBox" Grid.Column="1" Checked="OnWatchdogAutoStartChanged" Unchecked="OnWatchdogAutoStartChanged" />
+                </Grid>
+            </Border>
+            <Border Margin="0,12,0,0" Padding="16" Background="{DynamicResource App.Background}" BorderBrush="{DynamicResource App.Border}" BorderThickness="1" CornerRadius="6">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <StackPanel>
+                        <TextBlock Text="实验能力" Foreground="{DynamicResource App.Text}" />
+                        <TextBlock Text="开启后才会显示强制删除等高风险能力入口。" Foreground="{DynamicResource App.SubtleText}" TextWrapping="Wrap" />
+                    </StackPanel>
+                    <CheckBox x:Name="ExperimentalFeaturesCheckBox" Grid.Column="1" Checked="OnExperimentalChanged" Unchecked="OnExperimentalChanged" />
+                </Grid>
+            </Border>
+            <Border Margin="0,12,0,0" Padding="16" Background="{DynamicResource App.Background}" BorderBrush="{DynamicResource App.Border}" BorderThickness="1" CornerRadius="6">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <StackPanel>
+                        <TextBlock Text="强制删除" Foreground="{DynamicResource App.Text}" />
+                        <TextBlock Text="默认关闭；执行前需要完整确认句和备份。" Foreground="{DynamicResource App.SubtleText}" TextWrapping="Wrap" />
+                    </StackPanel>
+                    <CheckBox x:Name="ForceDeleteCheckBox" Grid.Column="1" Checked="OnForceDeleteChanged" Unchecked="OnForceDeleteChanged" />
                 </Grid>
             </Border>
         </StackPanel>

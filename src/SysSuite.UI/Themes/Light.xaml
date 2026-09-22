@@ -8,4 +8,14 @@
     <SolidColorBrush x:Key="App.Accent" Color="#FF0067C0" />
     <SolidColorBrush x:Key="App.AccentText" Color="#FFFFFFFF" />
     <SolidColorBrush x:Key="App.Hover" Color="#FFE5E5E5" />
+    <SolidColorBrush x:Key="App.Transparent" Color="#00FFFFFF" />
+    <SolidColorBrush x:Key="App.Safe" Color="#FF0F7B0F" />
+    <SolidColorBrush x:Key="App.SafeSoft" Color="#190F7B0F" />
+    <SolidColorBrush x:Key="App.SafeText" Color="#FF0A5E0A" />
+    <SolidColorBrush x:Key="App.Caution" Color="#FFB45309" />
+    <SolidColorBrush x:Key="App.CautionSoft" Color="#19B45309" />
+    <SolidColorBrush x:Key="App.CautionText" Color="#FF8A3B00" />
+    <SolidColorBrush x:Key="App.Risky" Color="#FFB3261E" />
+    <SolidColorBrush x:Key="App.RiskySoft" Color="#19B3261E" />
+    <SolidColorBrush x:Key="App.RiskyText" Color="#FF8C1B15" />
 </ResourceDictionary>

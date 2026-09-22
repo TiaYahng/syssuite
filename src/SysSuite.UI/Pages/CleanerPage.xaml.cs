@@ -1,8 +1,8 @@
-﻿using System.Windows.Controls;
+using System.Windows.Controls;
 
 namespace SysSuite.UI.Pages;
 
-public partial class CleanerPage : UserControl
+public partial class CleanerPage
 {
     public CleanerPage()
     {

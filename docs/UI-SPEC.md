@@ -6,11 +6,13 @@
 - 运行时：WPF (.NET 8) + WPF-UI（Fluent/Mica），侧边栏可折叠（汉堡按钮）
 - 主题：深/浅色跟随系统（ThemeService），所有颜色引用 ThemeResource，禁止硬编码
 - 窗口：默认 1280×800，最小 1024×680，记住位置与尺寸（%AppData%\SysSuite\ui.state.json）
+- 自适应：侧边栏/水平导航与状态栏占用后，内容区必须随窗口最大化、还原、拖拽缩放同比例拉伸或收缩；禁止固定内容宽度、居中限宽或只按初始尺寸计算布局
 - 字体：Segoe UI Variable；正文 14 / 小字 12 / 页面标题 28 SemiBold / 卡片标题 18 Medium
 - 图标：Segoe Fluent Icons（SymbolIcon），每个侧边栏项配 Symbol + 文本
 - DPI：app.manifest 声明 PerMonitorV2
 - 所有耗时操作：IProgress<T> 报告进度 +/− CancellationToken 可取消 + 状态栏显示
 - 设计令牌：`Radius/Card=8`、`Radius/Dialog=12`、`Spacing/XS=4`、`Spacing/S=8`、`Spacing/M=16`、`Spacing/L=24`、`Duration/Fast=120ms`、`Duration/Normal=200ms`、`Elevation/Dialog=32`。颜色、字体、尺寸一律引用资源 key，不得在控件内散落字面量
+- 内容间距（当前验收标准）：页面容器 `Margin=16,4,16,12`；页面根边距 `8,0,8,8`；区块间距 `4px`；内部列表行高 `22px`；空间足够时禁用内部滚动条。后续页面按此基准实现
 - 空态规范：每页统一 EmptyState（图标 + 一句解释 + 主操作或帮助链接）；骨架屏只用于首次加载，刷新用 InfoBar/ProgressRing
 - 可访问性：最小命中区 32×32；焦点可视化完整；键盘顺序与视觉顺序一致；所有图标按钮配 AutomationProperties.Name；正文对比度 ≥ 4.5:1
 - 高危 UI 分级：L0/L1 常规入口；L2 实验入口默认隐藏，需设置页显式开启；L3 只在实验分支/灰度构建显示。所有高危入口统一 `SeverityBanner + ConfirmationInputBox + 预览/备份/执行`
@@ -100,19 +102,19 @@
 - 结构契约：`InfoNode{Id,Title,Icon,Properties}`；`InfoProperty{Key,Value,Unit,Risk,Source,IsCopyable}`；只读数据禁止行内编辑
 
 ### 4.3 CleanerPage 磁盘清理
-顶部 Pivot（5 个子 Tab，风险分级内建于入口）：
-1) 快速清理：类别勾选卡（CheckboxCard：临时文件/浏览器缓存/回收站/缩略图…每卡显示可释放大小）
-   [开始扫描] → 进度页 → 结果 DataGrid（☑/图标/路径/大小/风险标签）→ 底部合计 + [立即清理]
-   清理前弹确认 → 可选"创建还原点"
-2) 深度清理：同上结构，类别为 DISM/WinSxS/Windows.old/传递优化/按文件压缩
-3) 大文件：盘符选择器 + 阈值下拉(100MB/500MB/1GB) → TopN 列表 → [打开所在目录] [删除]
-4) 重复文件：分组展示（Expander 组头=组路径摘要+浪费空间），每默认保留一项， Checkbox 全选同哈希
-5) 系统瘦身：WinSxS 分析（含 /ResetBase 警示开关）/ 压缩向导（compact.exe 进度）
-绑定：ScanCommand / CleanCommand / CancelCommand / Results(ObservableCollection<CleanItem>)、CleanItem{Path,Size,Category,Risk,IsChecked}
-- 清理结果支持 `SeverityBanner`（0 Risky / n Caution / n Safe）、汇总选中大小、逐项展开详情与排除原因；`Risky` 项默认不勾选且必须逐项确认
-- “深度清理”默认仅显示官方 DISM/传递优化等通道；“系统瘦身”为 L2，默认隐藏；设置页显式开启后显示红字声明与还原点强制提示
-- 大文件/重复文件删除前显示路径指纹、备份策略与不可恢复提示；回收站通道默认可还原，永久删除独立确认句
-- 分页/虚拟化：扫描结果超过 1 万条启用 `CollectionView` 分组与分页；滚动停止后才做字体/图标延迟加载
+单页布局：顶部操作栏 + 盘符芯片 + 扫描进度/剩余时间；左侧分类摘要，右侧按名称分组。
+1) 统一扫描：一次勾选固定盘符后扫描临时文件、重复文件与空文件夹；分类摘要只做过滤，不再切换页签
+   [扫描] → 进度与 ETA → 按名称分组结果（组头勾选/组内逐项勾选） → [清理选中]
+   每项显示盘符徽标、路径、大小与风险说明；盘符按钮打开所在路径
+2) 重复文件：同文件名跨盘聚合展示，组头可全选组内副本
+3) 临时文件：覆盖用户/系统 Temp 与固定盘常见 Temp 根；`Risky` 项默认禁选
+4) 空文件夹：删除前重新校验仍为空；标准程序、便携和含可执行文件目录自动排除
+命令：扫描 / 取消 / 全选 / 分组选择 / 清理选中 / 打开所在路径
+绑定：`DiskCleanerRow{Item,Group,IsChecked}`、`DiskScanProgress{Phase,Progress,ProcessedFiles,TotalFiles,Elapsed,EstimatedRemaining}`
+- 清理前弹确认并显示项数与可释放大小；清理仅允许本次扫描报告中的路径
+- 系统盘默认不选；标准程序目录、软件/便携/工具目录及含可执行文件或 portable 标记的目录自动排除
+- 结果使用虚拟化 `CollectionView` 分组；进度条显示阶段、文件数、已处理量与估算剩余时间
+- 扫描使用低优先级专用后台任务并限制并行度；扫描中盘符与分类区域保持可交互
 
 ### 4.4 UninstallerPage 卸载器
 布局：上工具条 ｜ 左列表 700px ｜ 右详情 ｜ 底部队列

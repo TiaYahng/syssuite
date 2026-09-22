@@ -16,3 +16,8 @@ logs/
 
 iconcache/
 installer/output/
+
+# 原生模块构建输出（rules/Build-Native.ps1）
+artifacts/
+# WorkBuddy 会话记忆，不属于项目源码
+.workbuddy/

@@ -1,4 +1,3 @@
-using System.Diagnostics;
 using System.IO;
 using System.Windows;
 using System.Windows.Controls;
@@ -18,6 +17,8 @@ public partial class SettingsPage : UserControl
         InitializeComponent();
         settingsService = ((App)Application.Current).Services.GetRequiredService<ISettingsService>();
         WatchdogAutoStartCheckBox.IsChecked = settingsService.Current.WatchdogAutoStart;
+        ExperimentalFeaturesCheckBox.IsChecked = settingsService.Current.EnableExperimentalFeatures;
+        ForceDeleteCheckBox.IsChecked = settingsService.Current.EnableForceDelete;
         initialized = true;
     }
 
@@ -50,5 +51,27 @@ public partial class SettingsPage : UserControl
         {
             runKey.DeleteValue("SysSuite.Watchdog", false);
         }
+    }
+
+    private void OnExperimentalChanged(object sender, RoutedEventArgs args)
+    {
+        if (!initialized)
+        {
+            return;
+        }
+
+        settingsService.Current.EnableExperimentalFeatures = ExperimentalFeaturesCheckBox.IsChecked == true;
+        settingsService.SaveDebounced();
+    }
+
+    private void OnForceDeleteChanged(object sender, RoutedEventArgs args)
+    {
+        if (!initialized)
+        {
+            return;
+        }
+
+        settingsService.Current.EnableForceDelete = ForceDeleteCheckBox.IsChecked == true;
+        settingsService.SaveDebounced();
     }
 }

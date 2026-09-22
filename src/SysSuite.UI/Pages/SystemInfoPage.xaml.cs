@@ -1,5 +1,9 @@
+using System.ComponentModel;
+using System.Diagnostics;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Input;
+using System.Windows.Media.Animation;
 using Microsoft.Extensions.DependencyInjection;
 using SysSuite.Core.Abstractions;
 using SysSuite.Core.Abstractions.System;
@@ -8,6 +12,12 @@ namespace SysSuite.UI.Pages;
 
 public partial class SystemInfoPage : UserControl
 {
+    private static readonly DependencyProperty ContentVerticalOffsetProperty = DependencyProperty.RegisterAttached(
+        "ContentVerticalOffset",
+        typeof(double),
+        typeof(SystemInfoPage),
+        new PropertyMetadata(0d, OnContentVerticalOffsetChanged));
+
     private readonly IHardwareInfoService hardwareInfoService;
     private readonly IMonitorService monitorService;
 
@@ -38,6 +48,48 @@ public partial class SystemInfoPage : UserControl
         await RefreshAsync();
     }
 
+    private void OnContentScrollPreviewMouseWheel(object sender, MouseWheelEventArgs args)
+    {
+        if (ContentScroll.ScrollableHeight <= 0)
+        {
+            return;
+        }
+
+        args.Handled = true;
+        var currentTarget = (double)ContentScroll.GetValue(ContentVerticalOffsetProperty);
+        var target = Math.Clamp(currentTarget - args.Delta, 0, ContentScroll.ScrollableHeight);
+        var animation = new DoubleAnimation(ContentScroll.VerticalOffset, target, TimeSpan.FromMilliseconds(240))
+        {
+            EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut }
+        };
+        ContentScroll.BeginAnimation(ContentVerticalOffsetProperty, animation);
+    }
+
+    private static void OnContentVerticalOffsetChanged(DependencyObject sender, DependencyPropertyChangedEventArgs args)
+    {
+        if (sender is ScrollViewer scrollViewer)
+        {
+            scrollViewer.ScrollToVerticalOffset((double)args.NewValue);
+        }
+    }
+
+    private void OnOpenEnvironmentVariablesClick(object sender, RoutedEventArgs args)
+    {
+        try
+        {
+            Process.Start(new ProcessStartInfo
+            {
+                FileName = "rundll32.exe",
+                Arguments = "sysdm.cpl,EditEnvironmentVariables",
+                UseShellExecute = true
+            });
+        }
+        catch (Win32Exception exception)
+        {
+            MessageBox.Show(exception.Message, "无法打开环境变量", MessageBoxButton.OK, MessageBoxImage.Warning);
+        }
+    }
+
     private async Task RefreshAsync()
     {
         StatusText.Text = "正在获取硬件信息...";
@@ -55,6 +107,10 @@ public partial class SystemInfoPage : UserControl
         BiosText.Text = string.IsNullOrWhiteSpace(info.BiosVersion) ? "BIOS：未知" : $"BIOS：{info.BiosVersion}";
         MemoryText.Text = $"内存：{info.TotalPhysicalMemory / 1024d / 1024d / 1024d:N1} GB";
         OsText.Text = $"{info.OperatingSystem} · {info.OsVersion}";
+
+        GraphicsList.ItemsSource = info.GraphicsCards.Select(card => new GraphicsCardRow(
+            $"{card.Name} · {card.CategoryDescription}",
+            BuildGraphicsDetail(card))).ToArray();
 
         StorageList.Items.Clear();
         foreach (var disk in info.Storage)
@@ -109,10 +165,25 @@ public partial class SystemInfoPage : UserControl
         };
     }
 
+    private static List<GraphicsDetailItem> BuildGraphicsDetail(GraphicsCardInfo card)
+    {
+        return new List<GraphicsDetailItem>
+        {
+            new("厂商", card.Manufacturer),
+            new("显存", card.MemoryBytes > 0 ? FormatBytes((long)card.MemoryBytes) : "未知"),
+            new("驱动", string.IsNullOrWhiteSpace(card.DriverVersion) ? "未知" : card.DriverVersion),
+            new("输出", string.IsNullOrWhiteSpace(card.VideoModeDescription) ? "未知" : card.VideoModeDescription)
+        };
+    }
+
     private sealed record DriveUsageRow(
         string DriveLetter,
         string Label,
         string TotalText,
         string UsedText,
         string UsageText);
+
+    private sealed record GraphicsDetailItem(string Label, string Value);
+
+    private sealed record GraphicsCardRow(string Title, IReadOnlyList<GraphicsDetailItem> Details);
 }

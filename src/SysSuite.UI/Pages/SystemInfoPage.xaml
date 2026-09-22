@@ -1,7 +1,7 @@
 <UserControl x:Class="SysSuite.UI.Pages.SystemInfoPage"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
-    <Grid Margin="12,8">
+    <Grid HorizontalAlignment="Stretch" VerticalAlignment="Stretch" Margin="8,0,8,8">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
             <RowDefinition Height="*" />
@@ -17,65 +17,78 @@
                     <TextBlock Text="系统信息" FontSize="18" FontWeight="SemiBold" Foreground="{DynamicResource App.Text}" />
                     <TextBlock x:Name="StatusText" Text="点击刷新获取硬件信息。" Margin="0,2,0,0" FontSize="12" TextWrapping="Wrap" Foreground="{DynamicResource App.SubtleText}" />
                 </StackPanel>
-                <Button Content="刷新" Grid.Column="1" Width="64" Height="28" VerticalAlignment="Center" FontSize="12" Padding="0" Background="{DynamicResource App.Accent}" Foreground="{DynamicResource App.AccentText}" Click="OnRefreshClick" />
+                <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                    <Button Content="刷新" Width="56" Height="26" Margin="0,0,6,0" FontSize="12" Padding="0" Background="{DynamicResource App.Accent}" Foreground="{DynamicResource App.AccentText}" Click="OnRefreshClick" />
+                    <Button Content="环境变量" Width="72" Height="26" FontSize="12" Padding="0" Background="{DynamicResource App.Background}" BorderBrush="{DynamicResource App.Border}" BorderThickness="1" Foreground="{DynamicResource App.Text}" Click="OnOpenEnvironmentVariablesClick" />
+                </StackPanel>
             </Grid>
         </Border>
 
-        <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" VerticalAlignment="Top">
-            <UniformGrid Columns="2">
-                <Border Background="{DynamicResource App.Surface}" BorderBrush="{DynamicResource App.Border}" BorderThickness="1" CornerRadius="8" Padding="10" Margin="0,0,4,4">
+        <ScrollViewer x:Name="ContentScroll" Grid.Row="1" VerticalScrollBarVisibility="Hidden" HorizontalAlignment="Stretch" VerticalAlignment="Stretch" PanningMode="VerticalOnly" Focusable="False" PreviewMouseWheel="OnContentScrollPreviewMouseWheel">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                </Grid.RowDefinitions>
+
+                <Border Grid.Row="0" Grid.Column="0" VerticalAlignment="Top" Background="{DynamicResource App.Surface}" BorderBrush="{DynamicResource App.Border}" BorderThickness="1" CornerRadius="8" Padding="8" Margin="0,0,4,4">
                     <StackPanel>
                         <TextBlock Text="核心硬件" FontWeight="SemiBold" Foreground="{DynamicResource App.Text}" />
-                        <TextBlock x:Name="CpuText" Margin="0,4,0,0" TextWrapping="Wrap" FontSize="13" Foreground="{DynamicResource App.Text}" />
-                        <TextBlock x:Name="MotherboardText" Margin="0,3,0,0" TextWrapping="Wrap" FontSize="13" Foreground="{DynamicResource App.Text}" />
-                        <TextBlock x:Name="BiosText" Margin="0,3,0,0" TextWrapping="Wrap" FontSize="13" Foreground="{DynamicResource App.Text}" />
-                        <TextBlock x:Name="MemoryText" Margin="0,3,0,0" TextWrapping="Wrap" FontSize="13" Foreground="{DynamicResource App.Text}" />
-                        <TextBlock x:Name="OsText" Margin="0,3,0,0" TextWrapping="Wrap" FontSize="13" Foreground="{DynamicResource App.Text}" />
+                        <TextBlock x:Name="CpuText" Margin="0,3,0,0" TextWrapping="Wrap" FontSize="12" Foreground="{DynamicResource App.Text}" />
+                        <TextBlock x:Name="MotherboardText" Margin="0,2,0,0" TextWrapping="Wrap" FontSize="12" Foreground="{DynamicResource App.Text}" />
+                        <TextBlock x:Name="BiosText" Margin="0,2,0,0" TextWrapping="Wrap" FontSize="12" Foreground="{DynamicResource App.Text}" />
+                        <TextBlock x:Name="MemoryText" Margin="0,2,0,0" TextWrapping="Wrap" FontSize="12" Foreground="{DynamicResource App.Text}" />
+                        <TextBlock x:Name="OsText" Margin="0,2,0,0" TextWrapping="Wrap" FontSize="12" Foreground="{DynamicResource App.Text}" />
                     </StackPanel>
                 </Border>
 
-                <Border Background="{DynamicResource App.Surface}" BorderBrush="{DynamicResource App.Border}" BorderThickness="1" CornerRadius="8" Padding="10" Margin="4,0,0,4">
+                <Border Grid.Row="0" Grid.Column="1" VerticalAlignment="Top" Background="{DynamicResource App.Surface}" BorderBrush="{DynamicResource App.Border}" BorderThickness="1" CornerRadius="8" Padding="8" Margin="4,0,0,4">
                     <StackPanel>
                         <TextBlock Text="实时监控" FontWeight="SemiBold" Foreground="{DynamicResource App.Text}" />
-                        <UniformGrid Columns="3" Margin="0,4,0,0">
-                            <Border Background="{DynamicResource App.Background}" CornerRadius="6" Padding="7" Margin="0,0,3,3">
+                        <UniformGrid Columns="3" Margin="0,3,0,0">
+                            <Border Background="{DynamicResource App.Background}" CornerRadius="6" Padding="4" Margin="0,0,2,2">
                                 <StackPanel>
-                                    <TextBlock Text="CPU" FontSize="11" Foreground="{DynamicResource App.SubtleText}" />
-                                    <TextBlock x:Name="CpuUsageText" Margin="0,1,0,0" FontSize="15" FontWeight="SemiBold" Foreground="{DynamicResource App.Text}" />
+                                    <TextBlock Text="CPU" FontSize="10" Foreground="{DynamicResource App.SubtleText}" />
+                                    <TextBlock x:Name="CpuUsageText" Margin="0,1,0,0" FontSize="14" FontWeight="SemiBold" Foreground="{DynamicResource App.Text}" />
                                 </StackPanel>
                             </Border>
-                            <Border Background="{DynamicResource App.Background}" CornerRadius="6" Padding="7" Margin="0,0,3,3">
+                            <Border Background="{DynamicResource App.Background}" CornerRadius="6" Padding="4" Margin="0,0,2,2">
                                 <StackPanel>
-                                    <TextBlock Text="内存" FontSize="11" Foreground="{DynamicResource App.SubtleText}" />
-                                    <TextBlock x:Name="MemoryUsageText" Margin="0,1,0,0" FontSize="15" FontWeight="SemiBold" Foreground="{DynamicResource App.Text}" />
+                                    <TextBlock Text="内存" FontSize="10" Foreground="{DynamicResource App.SubtleText}" />
+                                    <TextBlock x:Name="MemoryUsageText" Margin="0,1,0,0" FontSize="14" FontWeight="SemiBold" Foreground="{DynamicResource App.Text}" />
                                 </StackPanel>
                             </Border>
-                            <Border Background="{DynamicResource App.Background}" CornerRadius="6" Padding="7" Margin="0,0,0,3">
+                            <Border Background="{DynamicResource App.Background}" CornerRadius="6" Padding="4" Margin="0,0,0,2">
                                 <StackPanel>
-                                    <TextBlock Text="磁盘读取" FontSize="11" Foreground="{DynamicResource App.SubtleText}" />
-                                    <TextBlock x:Name="DiskReadText" Margin="0,1,0,0" FontSize="15" FontWeight="SemiBold" Foreground="{DynamicResource App.Text}" />
+                                    <TextBlock Text="磁盘读取" FontSize="10" Foreground="{DynamicResource App.SubtleText}" />
+                                    <TextBlock x:Name="DiskReadText" Margin="0,1,0,0" FontSize="14" FontWeight="SemiBold" Foreground="{DynamicResource App.Text}" />
                                 </StackPanel>
                             </Border>
-                            <Border Background="{DynamicResource App.Background}" CornerRadius="6" Padding="7" Margin="0,3,3,0">
+                            <Border Background="{DynamicResource App.Background}" CornerRadius="6" Padding="4" Margin="0,2,2,0">
                                 <StackPanel>
-                                    <TextBlock Text="磁盘写入" FontSize="11" Foreground="{DynamicResource App.SubtleText}" />
-                                    <TextBlock x:Name="DiskWriteText" Margin="0,1,0,0" FontSize="15" FontWeight="SemiBold" Foreground="{DynamicResource App.Text}" />
+                                    <TextBlock Text="磁盘写入" FontSize="10" Foreground="{DynamicResource App.SubtleText}" />
+                                    <TextBlock x:Name="DiskWriteText" Margin="0,1,0,0" FontSize="14" FontWeight="SemiBold" Foreground="{DynamicResource App.Text}" />
                                 </StackPanel>
                             </Border>
-                            <Border Grid.ColumnSpan="2" Background="{DynamicResource App.Background}" CornerRadius="6" Padding="7" Margin="0,3,0,0">
+                            <Border Grid.ColumnSpan="2" Background="{DynamicResource App.Background}" CornerRadius="6" Padding="4" Margin="0,2,0,0">
                                 <StackPanel>
-                                    <TextBlock Text="网络 收 / 发" FontSize="11" Foreground="{DynamicResource App.SubtleText}" />
-                                    <TextBlock x:Name="NetworkText" Margin="0,1,0,0" FontSize="15" FontWeight="SemiBold" Foreground="{DynamicResource App.Text}" />
+                                    <TextBlock Text="网络 收 / 发" FontSize="10" Foreground="{DynamicResource App.SubtleText}" />
+                                    <TextBlock x:Name="NetworkText" Margin="0,1,0,0" FontSize="14" FontWeight="SemiBold" Foreground="{DynamicResource App.Text}" />
                                 </StackPanel>
                             </Border>
                         </UniformGrid>
                     </StackPanel>
                 </Border>
 
-                <Border Background="{DynamicResource App.Surface}" BorderBrush="{DynamicResource App.Border}" BorderThickness="1" CornerRadius="8" Padding="10" Margin="0,0,4,4">
+                <Border Grid.Row="1" Grid.Column="0" Background="{DynamicResource App.Surface}" BorderBrush="{DynamicResource App.Border}" BorderThickness="1" CornerRadius="8" Padding="10" Margin="0,0,4,4">
                     <StackPanel>
                         <TextBlock Text="存储设备" FontWeight="SemiBold" Foreground="{DynamicResource App.Text}" />
-                        <ListView x:Name="StorageList" Height="54" Margin="0,4,0,0" Background="Transparent" BorderThickness="0" ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+                        <ListView x:Name="StorageList" Margin="0,4,0,0" Background="Transparent" BorderThickness="0" ScrollViewer.VerticalScrollBarVisibility="Disabled" ScrollViewer.HorizontalScrollBarVisibility="Disabled">
                             <ListView.Resources>
                                 <Style TargetType="ListViewItem">
                                     <Setter Property="Padding" Value="0" />
@@ -85,7 +98,7 @@
                             </ListView.Resources>
                         </ListView>
                         <TextBlock Text="盘符使用情况" Margin="0,3,0,0" FontWeight="SemiBold" Foreground="{DynamicResource App.Text}" />
-                        <ListView x:Name="DriveList" Height="92" Margin="0,3,0,0" Background="Transparent" BorderThickness="0" ScrollViewer.VerticalScrollBarVisibility="Auto" ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+                        <ListView x:Name="DriveList" Margin="0,3,0,0" Background="Transparent" BorderThickness="0" ScrollViewer.VerticalScrollBarVisibility="Disabled" ScrollViewer.HorizontalScrollBarVisibility="Disabled">
                             <ListView.Resources>
                                 <Style TargetType="ListViewItem">
                                     <Setter Property="Padding" Value="0" />
@@ -113,10 +126,50 @@
                     </StackPanel>
                 </Border>
 
-                <Border Background="{DynamicResource App.Surface}" BorderBrush="{DynamicResource App.Border}" BorderThickness="1" CornerRadius="8" Padding="10" Margin="4,0,0,4">
+                <Border Grid.Row="1" Grid.Column="1" Background="{DynamicResource App.Surface}" BorderBrush="{DynamicResource App.Border}" BorderThickness="1" CornerRadius="8" Padding="10" Margin="4,0,0,4">
+                    <StackPanel>
+                        <TextBlock Text="显卡信息" FontWeight="SemiBold" Foreground="{DynamicResource App.Text}" />
+                        <ListView x:Name="GraphicsList" Margin="0,4,0,0" Background="Transparent" BorderThickness="0" ScrollViewer.VerticalScrollBarVisibility="Disabled" ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+                            <ListView.Resources>
+                                <Style TargetType="ListViewItem">
+                                    <Setter Property="Padding" Value="0" />
+                                    <Setter Property="Margin" Value="0,0,0,3" />
+                                    <Setter Property="MinHeight" Value="20" />
+                                </Style>
+                            </ListView.Resources>
+                            <ListView.ItemTemplate>
+                                <DataTemplate>
+                                    <StackPanel>
+                                        <TextBlock Text="{Binding Title}" FontWeight="SemiBold" TextWrapping="Wrap" Foreground="{DynamicResource App.Text}" />
+                                        <ItemsControl ItemsSource="{Binding Details}" Margin="0,3,0,0">
+                                            <ItemsControl.ItemsPanel>
+                                                <ItemsPanelTemplate>
+                                                    <WrapPanel Orientation="Horizontal" />
+                                                </ItemsPanelTemplate>
+                                            </ItemsControl.ItemsPanel>
+                                            <ItemsControl.ItemTemplate>
+                                                <DataTemplate>
+                                                    <Border MaxWidth="430" Background="{DynamicResource App.Background}" CornerRadius="4" Padding="5,2" Margin="0,0,4,3">
+                                                        <TextBlock TextWrapping="Wrap" FontSize="12" Foreground="{DynamicResource App.SubtleText}">
+                                                            <Run Text="{Binding Label}" FontWeight="SemiBold" />
+                                                            <Run Text="：" />
+                                                            <Run Text="{Binding Value}" />
+                                                        </TextBlock>
+                                                    </Border>
+                                                </DataTemplate>
+                                            </ItemsControl.ItemTemplate>
+                                        </ItemsControl>
+                                    </StackPanel>
+                                </DataTemplate>
+                            </ListView.ItemTemplate>
+                        </ListView>
+                    </StackPanel>
+                </Border>
+
+                <Border Grid.Row="2" Grid.Column="0" Grid.ColumnSpan="2" Background="{DynamicResource App.Surface}" BorderBrush="{DynamicResource App.Border}" BorderThickness="1" CornerRadius="8" Padding="10" Margin="0">
                     <StackPanel>
                         <TextBlock Text="网络适配器" FontWeight="SemiBold" Foreground="{DynamicResource App.Text}" />
-                        <ListView x:Name="NetworkList" Height="92" Margin="0,4,0,0" Background="Transparent" BorderThickness="0" ScrollViewer.VerticalScrollBarVisibility="Auto" ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+                        <ListView x:Name="NetworkList" Margin="0,4,0,0" Background="Transparent" BorderThickness="0" ScrollViewer.VerticalScrollBarVisibility="Disabled" ScrollViewer.HorizontalScrollBarVisibility="Disabled">
                             <ListView.Resources>
                                 <Style TargetType="ListViewItem">
                                     <Setter Property="Padding" Value="0" />
@@ -127,7 +180,7 @@
                         </ListView>
                     </StackPanel>
                 </Border>
-            </UniformGrid>
+            </Grid>
         </ScrollViewer>
     </Grid>
 </UserControl>

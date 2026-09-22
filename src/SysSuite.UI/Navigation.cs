@@ -1,4 +1,5 @@
 using System.Windows.Controls;
+using System.Windows;
 using SysSuite.UI.Pages;
 
 namespace SysSuite.UI;
@@ -27,6 +28,8 @@ public sealed class NavigationService : INavigationService
         [NavPage.Settings] = () => new SettingsPage()
     };
 
+    private readonly Dictionary<NavPage, UserControl> cachedPages = new();
+
     public event EventHandler<NavPage>? CurrentPageChanged;
 
     public NavPage CurrentPage { get; private set; }
@@ -35,6 +38,22 @@ public sealed class NavigationService : INavigationService
     {
         CurrentPage = page;
         CurrentPageChanged?.Invoke(this, page);
-        return pageFactories.TryGetValue(page, out var factory) ? factory() : null;
+        if (cachedPages.TryGetValue(page, out var cachedPage))
+        {
+            return cachedPage;
+        }
+
+        if (!pageFactories.TryGetValue(page, out var factory))
+        {
+            return null;
+        }
+
+        var instance = factory();
+        instance.HorizontalAlignment = HorizontalAlignment.Stretch;
+        instance.VerticalAlignment = VerticalAlignment.Stretch;
+        instance.HorizontalContentAlignment = HorizontalAlignment.Stretch;
+        instance.VerticalContentAlignment = VerticalAlignment.Stretch;
+        cachedPages[page] = instance;
+        return instance;
     }
 }

@@ -16,6 +16,7 @@
   <ItemGroup>
     <PackageReference Include="coverlet.collector" />
     <PackageReference Include="Microsoft.NET.Test.Sdk" />
+    <PackageReference Include="System.Drawing.Common" />
     <PackageReference Include="xunit" />
     <PackageReference Include="xunit.runner.visualstudio" />
   </ItemGroup>
@@ -26,7 +27,6 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\SysSuite.Core\SysSuite.Core.csproj" />
-    <ProjectReference Include="..\..\src\SysSuite.Interop\SysSuite.Interop.csproj" />
   </ItemGroup>
 
 </Project>

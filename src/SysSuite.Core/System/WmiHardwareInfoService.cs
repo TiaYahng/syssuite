@@ -74,6 +74,7 @@ public sealed class WmiHardwareInfoService : IHardwareInfoService
 
                 using (var adapters = new ManagementObjectSearcher("SELECT Name, MACAddress, NetEnabled FROM Win32_NetworkAdapter WHERE PhysicalAdapter = TRUE"))
                 {
+                    computer = computer with { GraphicsCards = GetGraphicsCards() };
                     computer = computer with
                     {
                         NetworkAdapters = adapters.Get().Cast<ManagementObject>()
@@ -96,5 +97,57 @@ public sealed class WmiHardwareInfoService : IHardwareInfoService
         {
             return new Result<HardwareInfo>(ErrorType.AccessDenied, exception.Message);
         }
+    }
+
+    private static global::SysSuite.Core.Abstractions.System.GraphicsCardInfo[] GetGraphicsCards()
+    {
+        using (var videoControllers = new ManagementObjectSearcher("SELECT Name, AdapterCompatibility, AdapterRAM, DriverVersion, VideoModeDescription FROM Win32_VideoController"))
+        {
+            return videoControllers.Get().Cast<ManagementObject>()
+                .Select(item =>
+                {
+                    var name = item["Name"]?.ToString() ?? "未知显卡";
+                    var manufacturer = item["AdapterCompatibility"]?.ToString() ?? "未知厂商";
+                    return new global::SysSuite.Core.Abstractions.System.GraphicsCardInfo(
+                        name,
+                        manufacturer,
+                        Convert.ToUInt64(item["AdapterRAM"] ?? 0UL, CultureInfo.InvariantCulture),
+                        item["DriverVersion"]?.ToString() ?? string.Empty,
+                        item["VideoModeDescription"]?.ToString() ?? string.Empty,
+                        GetGraphicsCategory(name, manufacturer));
+                })
+                .ToArray();
+        }
+    }
+
+    private static string GetGraphicsCategory(string name, string manufacturer)
+    {
+        var text = $"{manufacturer} {name}";
+        if (ContainsAny(text, "Virtual", "Hyper-V", "Basic Display"))
+        {
+            return "虚拟 / 基本显示适配器";
+        }
+
+        if (text.Contains("NVIDIA", StringComparison.OrdinalIgnoreCase))
+        {
+            return "独立显卡";
+        }
+
+        if (text.Contains("Intel", StringComparison.OrdinalIgnoreCase))
+        {
+            return text.Contains("Arc", StringComparison.OrdinalIgnoreCase) ? "独立显卡" : "集成显卡";
+        }
+
+        if (text.Contains("AMD", StringComparison.OrdinalIgnoreCase) || text.Contains("ATI", StringComparison.OrdinalIgnoreCase))
+        {
+            return ContainsAny(text, "Radeon RX", "Radeon Pro", "FirePro") ? "独立显卡" : "集成显卡";
+        }
+
+        return "显示适配器";
+    }
+
+    private static bool ContainsAny(string value, params string[] values)
+    {
+        return values.Any(value.Contains);
     }
 }
