@@ -33,9 +33,8 @@ public partial class UninstallerPage
 
     private void UpdateCommandStates()
     {
-        var hasSelection = GetSelectedApp() is not null;
-        UninstallButton.IsEnabled = hasSelection;
-        ForceButton.IsEnabled = hasSelection;
+        // 顶部已移除「卸载」按钮（右键菜单保留），这里只维护「强制删除」的可用性。
+        ForceButton.IsEnabled = GetSelectedApp() is not null && !isBusy;
     }
 
     private AppRecord? GetSelectedApp()

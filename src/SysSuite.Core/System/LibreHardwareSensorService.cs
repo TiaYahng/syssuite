@@ -101,6 +101,7 @@ public sealed partial class LibreHardwareSensorService : ISensorService
                 lastSnapshot = new SensorSnapshot(true, null, readings)
                 {
                     CpuTemperatureNeedsKernelDriver = NeedsKernelDriverNotice(readings),
+                    CpuTemperatureNeedsElevation = NeedsElevationNotice(readings),
                 };
                 return lastSnapshot.Success();
             }
@@ -125,16 +126,30 @@ public sealed partial class LibreHardwareSensorService : ISensorService
     /// 不应误报成驱动缺失 —— 所以两个条件必须同时满足。
     /// </summary>
     private static bool NeedsKernelDriverNotice(List<SensorReading> readings)
+        => !HasCpuTemperature(readings) && !SensorDiagnostics.IsPawnIoAvailable();
+
+    /// <summary>
+    /// 判断是否该提示"PawnIO 已装，但需要管理员权限才能读 CPU 温度"。
+    ///
+    /// 2026-09-23 实测确认这是**另一种独立的失败模式**：装好 PawnIO 后，
+    /// 非提权进程依然读不到任何 CPU 温度/倍频/功耗（LHM 要通过 PawnIO 加载内核模块，
+    /// 该动作需要管理员）；提权后同一份代码读到 47 个传感器而不是 39 个。
+    /// 若不单独识别，用户会以为是 PawnIO 没装好而反复重装。
+    /// </summary>
+    private static bool NeedsElevationNotice(List<SensorReading> readings)
+        => !HasCpuTemperature(readings) && SensorDiagnostics.IsPawnIoInstalledButNotElevated();
+
+    private static bool HasCpuTemperature(List<SensorReading> readings)
     {
         foreach (var reading in readings)
         {
             if (reading.HardwareClass == SensorHardwareClass.Cpu && reading.Kind == SensorKind.Temperature)
             {
-                return false;
+                return true;
             }
         }
 
-        return !SensorDiagnostics.IsPawnIoAvailable();
+        return false;
     }
 
     private Result<SensorSnapshot> BuildUnavailableResult()

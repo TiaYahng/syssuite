@@ -78,6 +78,32 @@ public class SensorAggregationTests
         var snapshot = new SensorSnapshot(true, null, []);
 
         Assert.False(snapshot.CpuTemperatureNeedsKernelDriver);
+        Assert.False(snapshot.CpuTemperatureNeedsElevation);
+    }
+
+    [Fact]
+    public void CpuTemperatureNeedsElevationIsIndependentOfKernelDriverFlag()
+    {
+        // 两种失败模式互斥：装好了驱动就只可能提示"要提权"，不可能同时提示"要装驱动"。
+        // 若实现把二者合并成一个布尔，UI 就会给出错误的处置建议。
+        var needsDriver = new SensorSnapshot(true, null, []) { CpuTemperatureNeedsKernelDriver = true };
+        var needsElevation = new SensorSnapshot(true, null, []) { CpuTemperatureNeedsElevation = true };
+
+        Assert.True(needsDriver.CpuTemperatureNeedsKernelDriver);
+        Assert.False(needsDriver.CpuTemperatureNeedsElevation);
+        Assert.True(needsElevation.CpuTemperatureNeedsElevation);
+        Assert.False(needsElevation.CpuTemperatureNeedsKernelDriver);
+    }
+
+    [Fact]
+    public void CpuTemperaturePresentMeansNoGapFlagsNeeded()
+    {
+        // 有 CPU 温度就不该出现任何"读不到"的提示
+        var snapshot = Snapshot(
+            Reading(SensorKind.Temperature, SensorHardwareClass.Cpu, "Intel Core i7", "CPU Package", 62.0));
+
+        Assert.False(snapshot.CpuTemperatureNeedsKernelDriver);
+        Assert.False(snapshot.CpuTemperatureNeedsElevation);
     }
 
     private static SensorSnapshot Snapshot(params SensorReading[] readings) => new(true, null, readings);

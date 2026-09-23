@@ -22,6 +22,7 @@ public partial class UninstallerPage : UserControl
     private readonly IAppChangeMonitor changeMonitor;
     private readonly ISettingsService settingsService;
     private bool isBusy;
+    private CancellationTokenSource? iconLoadSource;
 
     public UninstallerPage()
     {
@@ -50,6 +51,7 @@ public partial class UninstallerPage : UserControl
     {
         changeMonitor.StopMonitoring();
         UpdateMonitorState();
+        iconLoadSource?.Cancel();
     }
 
     private void OnAppListChanged(object? sender, IReadOnlyList<AppRecord> apps)
@@ -189,6 +191,15 @@ public partial class UninstallerPage : UserControl
         isBusy = true;
         RefreshButton.IsEnabled = false;
         StatusText.Text = "正在枚举应用...";
+
+        // 新一轮刷新作废上一轮的图标加载：老的图标任务往往正卡在 COM/磁盘 IO 上，
+        // 不取消就会与新任务抢线程池与磁盘，刷新越频繁越慢。
+        var iconLoad = new CancellationTokenSource();
+        var previous = iconLoadSource;
+        iconLoadSource = iconLoad;
+        previous?.Cancel();
+        previous?.Dispose();
+
         try
         {
             var result = await enumerationService.RefreshAsync();
@@ -209,17 +220,12 @@ public partial class UninstallerPage : UserControl
             AppsList.ItemsSource = rows;
             ApplyView();
             UpdateSummary();
-            await Task.WhenAll(rows.Select(async row =>
-            {
-                var iconResult = await iconCacheService.GetIconPathAsync(row.App);
-                if (iconResult.IsSuccess && !string.IsNullOrWhiteSpace(iconResult.Value))
-                {
-                    row.Icon = System.Windows.Media.Imaging.BitmapFrame.Create(new Uri(iconResult.Value));
-                }
-            }));
             UpdateCommandStates();
-            UpdateSummary();
-            StatusText.Text = $"已加载 {rows.Count} 个应用";
+
+            // 先把列表呈现出来，再后台补图标 —— 列表本身不依赖图标，
+            // 等图标全部就绪才结束会让用户盯着空列表。
+            StatusText.Text = $"已加载 {rows.Count} 个应用，正在载入图标...";
+            await LoadIconsAsync(rows, iconLoad.Token);
         }
         finally
         {
@@ -239,7 +245,6 @@ public partial class UninstallerPage : UserControl
 
         isBusy = true;
         OperationProgress.Visibility = Visibility.Visible;
-        UninstallButton.IsEnabled = false;
         ForceButton.IsEnabled = false;
         RefreshButton.IsEnabled = false;
         SearchBox.IsEnabled = false;

@@ -67,6 +67,16 @@ public sealed record SensorSnapshot(
     public bool CpuTemperatureNeedsKernelDriver { get; init; }
 
     /// <summary>
+    /// CPU 温度读不到，且 PawnIO **已装**但当前进程不是管理员。
+    ///
+    /// 与 <see cref="CpuTemperatureNeedsKernelDriver"/> 是两种不同的失败模式，提示文案也不同：
+    /// 前者要用户去装驱动，后者要用户以管理员身份重启程序。
+    /// 2026-09-23 在 i7-10750H 上实测：装好 PawnIO 后，非提权读不到任何 CPU 温度（39 个传感器
+    /// 的温度/倍频/功耗全为 null），提权后读到 47 个且数值齐全。
+    /// </summary>
+    public bool CpuTemperatureNeedsElevation { get; init; }
+
+    /// <summary>
     /// 指定类别中所有读数的最大值，用于"CPU 包温"这类聚合展示。
     ///
     /// **调用方应优先用 <see cref="MaxTemperatureOf"/>**：本方法跨硬件聚合，

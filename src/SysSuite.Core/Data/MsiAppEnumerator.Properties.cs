@@ -2,46 +2,61 @@ namespace SysSuite.Core.Data;
 
 public sealed partial class MsiAppEnumerator
 {
-    private static string? GetProperty(string productCode, string propertyName)
+    /// <summary>
+    /// 按已解析的安装上下文读取属性。
+    /// 传 null 时保留"逐个上下文探测"的兼容语义，供少量一次性调用方使用。
+    /// </summary>
+    private static string? GetProperty(string productCode, string propertyName, InstallContext? context = null)
     {
-        foreach (var context in Enum.GetValues<InstallContext>())
+        if (context is { } single)
         {
-            var buffer = new char[MaximumStringLength];
-            var length = buffer.Length;
-            var result = NativeMethods.MsiGetProductInfoExW(
-                productCode,
-                null,
-                (int)context,
-                propertyName,
-                buffer,
-                ref length);
-            if (result == 0 && length > 0)
+            return QueryProperty(productCode, propertyName, single, out var value) ? value : null;
+        }
+
+        foreach (var candidate in Enum.GetValues<InstallContext>())
+        {
+            if (QueryProperty(productCode, propertyName, candidate, out var found))
             {
-                return new string(buffer, 0, length);
+                return found;
             }
         }
 
         return null;
     }
 
-    private static bool? GetBooleanProperty(string productCode, string propertyName)
+    private static bool? GetBooleanProperty(string productCode, string propertyName, InstallContext context)
     {
-        foreach (var context in Enum.GetValues<InstallContext>())
+        if (!QueryProperty(productCode, propertyName, context, out var value))
         {
-            var buffer = new char[MaximumStringLength];
-            var length = buffer.Length;
-            var result = NativeMethods.MsiGetProductInfoExW(
-                productCode,
-                null,
-                (int)context,
-                propertyName,
-                buffer,
-                ref length);
-            if (result != 0 || length == 0) continue;
-            var value = new string(buffer, 0, length);
-            if (int.TryParse(value, out var num)) return num != 0;
+            return null;
         }
-        return null;
+
+        return int.TryParse(value, out var number) ? number != 0 : null;
+    }
+
+    private static bool QueryProperty(
+        string productCode,
+        string propertyName,
+        InstallContext context,
+        out string value)
+    {
+        var buffer = new char[MaximumStringLength];
+        var length = buffer.Length;
+        var result = NativeMethods.MsiGetProductInfoExW(
+            productCode,
+            null,
+            (int)context,
+            propertyName,
+            buffer,
+            ref length);
+        if (result == 0 && length > 0)
+        {
+            value = new string(buffer, 0, length);
+            return true;
+        }
+
+        value = string.Empty;
+        return false;
     }
 
     private static string? ReadRecordString(uint record, uint field)

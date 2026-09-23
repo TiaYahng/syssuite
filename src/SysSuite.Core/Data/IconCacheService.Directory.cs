@@ -75,6 +75,13 @@ public sealed partial class IconCacheService
         }
     }
 
+    /// <summary>
+    /// 从卸载命令行反推安装目录。
+    ///
+    /// 仅当卸载程序是"应用自己的卸载器"（而非通用安装器宿主）时才有意义 ——
+    /// 否则会推导出 <c>C:\WINDOWS</c> 这种系统目录，再对其中的
+    /// <c>IsUninst.exe</c> 抽图标，触发 Windows shell 的长回退路径（实测单个 32 秒）。
+    /// </summary>
     private static string? DeriveInstallDirectoryFromUninstallString(string? uninstallString)
     {
         var reference = ParseIconReference(uninstallString);
@@ -84,7 +91,14 @@ public sealed partial class IconCacheService
         }
 
         var executable = ResolveSystemPath(reference.Value.Path);
-        if (executable is null || !File.Exists(executable) || !IsAdministrativeBinary(executable))
+        if (executable is null || !File.Exists(executable) || IsLegacyInstallerHost(executable))
+        {
+            return null;
+        }
+
+        // IsAdministrativeBinary 排除掉 uninstall/unins/remove/maintenance 这类名字，
+        // 它们指向的目录多半是系统目录而不是应用目录。
+        if (!IsAdministrativeBinary(executable))
         {
             return null;
         }

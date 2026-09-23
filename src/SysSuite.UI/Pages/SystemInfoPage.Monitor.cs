@@ -89,12 +89,29 @@ public partial class SystemInfoPage
         CpuTemperatureText.Text = FormatTemperature(snapshot.MaxTemperatureOf(SensorHardwareClass.Cpu));
         GpuTemperatureText.Text = FormatTemperature(snapshot.MaxTemperatureOf(SensorHardwareClass.Gpu));
 
-        // CPU 温度缺失且缺 PawnIO 内核驱动时，必须说明原因 ——
-        // 否则用户只会看到一个莫名的 "--"，误以为程序坏了。
-        ShowSensorHint(snapshot.CpuTemperatureNeedsKernelDriver
-            ? "CPU 温度需要内核驱动 PawnIO（LibreHardwareMonitor 0.9.6 起用它替代被 Defender 下架的 WinRing0）。"
-              + "请从 pawnio.eu 安装并重启本程序；GPU 与硬盘温度不受影响。"
-            : null);
+        // CPU 温度缺失时必须说明原因 —— 否则用户只会看到一个莫名的 "--"，误以为程序坏了。
+        // 两种原因要分开提示：缺驱动 vs 已装驱动但没提权，处置动作完全不同。
+        ShowSensorHint(DescribeCpuTemperatureGap(snapshot));
+    }
+
+    /// <summary>
+    /// 依据快照给出 CPU 温度缺失的可操作提示；一切正常时返回 null（隐藏提示行）。
+    /// </summary>
+    private static string? DescribeCpuTemperatureGap(SensorSnapshot snapshot)
+    {
+        if (snapshot.CpuTemperatureNeedsKernelDriver)
+        {
+            return "CPU 温度需要内核驱动 PawnIO（LibreHardwareMonitor 0.9.6 起用它替代被 Defender 下架的 WinRing0）。"
+                + "请从 pawnio.eu 安装后重启本程序；GPU 与硬盘温度不受影响。";
+        }
+
+        if (snapshot.CpuTemperatureNeedsElevation)
+        {
+            return "已检测到 PawnIO，但读取 CPU 温度需要管理员权限。请以管理员身份重启本程序；"
+                + "GPU 与硬盘温度不受影响。";
+        }
+
+        return null;
     }
 
     /// <summary>显示/隐藏传感器说明行；传 null 表示隐藏。</summary>

@@ -50,11 +50,13 @@ public sealed class UninstallEnumerationService : IUninstallEnumerationService, 
         {
             try
             {
+                // 三个来源并发跑：注册表 / MSI 各自要读大量注册表键，
+                // Store 走 WinRT 且明显更慢。串行会让总耗时变成三者之和。
                 var registryTask = Task.Run(() => registryEnumerator.Enumerate(), workToken);
                 var storeTask = Task.Run(() => StoreAppEnumerator.Enumerate(), workToken);
-                Task.WaitAll(new[] { registryTask, storeTask }, CancellationToken.None);
-                var registryResult = registryTask.Result;
-                var storeResult = storeTask.Result;
+                var results = await Task.WhenAll(registryTask, storeTask);
+                var registryResult = results[0];
+                var storeResult = results[1];
                 if (!registryResult.IsSuccess && !storeResult.IsSuccess)
                 {
                     throw new InvalidOperationException("All uninstall sources failed to enumerate.");

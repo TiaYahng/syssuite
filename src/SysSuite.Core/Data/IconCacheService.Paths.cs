@@ -89,6 +89,35 @@ public sealed partial class IconCacheService
         return Directory.Exists(normalized) ? normalized : null;
     }
 
+    /// <summary>
+    /// 老式安装器宿主程序（16/32 位 stub），**不可用于推导安装目录**。
+    ///
+    /// 实测踩坑：`MPICH.NT.1.2.1` 只有 `UninstallString = C:\WINDOWS\IsUninst.exe -f"...Uninst.isu"`，
+    /// 既没有 DisplayIcon 也没有 InstallLocation，于是回退到"从卸载命令行推导安装目录"，
+    /// 再对推导出的 `IsUninst.exe` 调 <c>Icon.ExtractAssociatedIcon</c> ——
+    /// 结果 Windows 的 shell 图标/缩略图管线在这类老 stub 上一路回退，
+    /// **单个应用耗时 32 秒**（实测），把整个刷新从 1 秒拖到 10 秒以上。
+    ///
+    /// 注意：这里**只**用于阻断"反推安装目录"这条路径。
+    /// 若某个应用自己在 DisplayIcon 里显式指向 uninst.exe，那是作者的有意选择，
+    /// 不应被拦（见 <see cref="IsSupportedIconFile"/> 的注释）。
+    /// </summary>
+    private static bool IsLegacyInstallerHost(string path)
+    {
+        var fileName = Path.GetFileName(path);
+        return LegacyInstallerHosts.Contains(fileName);
+    }
+
+    private static readonly HashSet<string> LegacyInstallerHosts = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "IsUninst.exe", // InstallShield 5/6 的卸载调度器（MPICH 这类 1990 年代安装包）
+        "unwise.exe",   // Wise Installer
+        "unwise32.exe",
+        "_iu14d2n.tmp",
+        "unins000.exe",
+        "unins001.exe",
+    };
+
     private static bool IsSupportedIconFile(string? path)
     {
         return path is not null
