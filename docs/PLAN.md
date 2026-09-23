@@ -52,16 +52,16 @@
 | 里程碑 | 内容 | 工期 | 负责 | 状态 |
 |---|---|---|---|---|
 | M0 | 仓库 + 架构骨架 + Interop + UI 壳 + Watchdog 骨架 | 2 周 | ABC | [~] | ~95%；T0.2 已完整闭环（C++ 本机编译通过 + FFI 冒烟真实执行全绿）；剩余缺口：app.manifest 未声明 x64、既有 P/Invoke 未归拢、Clang-Tidy 未接入、Catch2 待 CI |
-| M1 | 系统信息 + 监控 + 基准测试 | 2 周 | C 为主 | [x] | **已完成**；T1.1~T1.6 全部落地，提权真机实测闭环（SMART 全字段 + GPU/SSD 温度）。唯一遗留：CPU 温度需用户装 PawnIO（D15） |
-| M2 | 卸载器（完整） | 3 周 | B 为主 | [x] | ~95%；T2.1~T2.7 均有真实实现且可用 |
+| M1 | 系统信息 + 监控 + 基准测试 | 2 周 | C 为主 | [x] | **已完成**；T1.1~T1.6 全部落地，提权真机实测闭环（SMART 全字段 + GPU/SSD 温度）。**CPU 温度已闭环**：PawnIO v2.2.0 已装，提权后读到 47 个传感器（CPU Core 100℃ / Power 30.38W / Clock 3688MHz），见 D15 |
+| M2 | 卸载器（完整） | 3 周 | B 为主 | [x] | ~95%；T2.1~T2.7 均有真实实现且可用。**图标冷加载已优化 8.8x**（23,565ms → 2,690ms），病态单条 32,061ms → 2,263ms；顶部「卸载」按钮已按用户要求移除（右键菜单保留） |
 | M3 | 磁盘清理（MFT 扫描 + 规则引擎） | 3 周 | BC | [~] | ~80%；T3.1/T3.3/T3.4 完成；T3.2 已用 C# P/Invoke 实现（偏离计划的 C++ 原生通道）且性能未实测；T3.5 保持冻结 |
-| M4 | 更新控制 | 1 周 | B | [ ] | 0%；未开工 |
+| M4 | 更新控制 | 1 周 | B | [~] | ~75%；T4.1 双层开关/快照/还原/UI 已落地并单测覆盖（21 项）；T4.2 漂移自检已落地，自动轮询 Timer 与 Home 版提示未接；WaaSMedicSvc 改为仅记录方案不实现 |
 | M5 | 安全中心 + 防护控制 + 软件管家 | 3 周 | B | [ ] | 0%；`SecurityPage`/`SoftwareHubPage` 仍为 11 行 `InitializeComponent()` 空壳（XAML 只有标题 + "MVP0 骨架"占位文案） |
 | M6 | 桌面整理 | 4~6 周 | C 为主 | [ ] | 0%；`DesktopPage` 仍为空壳 |
 | M7 | 搜索 / 本地化 / Ribbon / 工具箱 / 打包 / 签名 / 灰度 | 3 周 | A | [ ] | 0%；`installer/` 为空目录，无打包与签名（D18）；`ToolboxPage` 亦为空壳 |
 | M8 | 测试与质量横切（贯穿，见 §5） | 不单列 | ABC | [~] | ~15%；仅 T8.1 的 C# 静态分析落地（`.editorconfig` + `EnableNETAnalyzers` + `TreatWarningsAsErrors`），T8.2/T8.3/T8.4 未开工 |
 
-**当前实施完成度：M0/M1/M2 已闭环，M3 约 80%；M4~M8 全部未开工。**
+**当前实施完成度：M0/M1/M2/D1 已闭环，M3 约 80%，M4 约 75%；M5~M8 未开工。**
 
 **状态图例**：`[x]` 已闭环（可验收）；`[~]` 大部分完成、有明确登记缺口；`[ ]` 未开工。
 
@@ -168,7 +168,7 @@
 - [x] App.xaml：DI 容器、`DispatcherUnhandledException` / `AppDomain.UnhandledException` / `TaskScheduler.UnobservedTaskException` 三处全局钩子（WpfUi 资源合并不适用，未装该包）
 - [~] MainWindow.xaml：NavigationView（仪表盘/系统信息/磁盘清理/卸载器/安全中心/桌面整理/软件管家/工具箱 + Footer 设置）+ ContentFrame + 全局 StatusBar —— **导航区与 ContentFrame 已落地（用自绘 `SidebarPanel` 而非 WPF-UI 的 `NavigationView`）；全局 StatusBar 完全缺失**
 - [x] `NavPage` 枚举 + NavigationService
-- [~] 9 个 Page + 9 个 ViewModel 空壳（Dashboard/SystemInfo/Cleaner/Uninstaller/Security/Desktop/SoftwareHub/Toolbox/Settings）—— **9 个 Page 与 9 个 ViewModel 文件均已建齐，但 9 个 ViewModel 至今仍是空壳（`RelayCommand(_ => { })`）；真实业务逻辑写在 code-behind 里，与 UI-SPEC §3 冲突，详见 §11 偏差 D1**
+- [x] 9 个 Page + 9 个 ViewModel（Dashboard/SystemInfo/Cleaner/Uninstaller/Security/Desktop/SoftwareHub/Toolbox/Settings）—— **已闭环（2026-09-23，偏差 D1 已解决）**：新增 `PageViewModelBase`，9 个 ViewModel 全部继承并承载真实业务逻辑，code-behind 仅剩控件回填与事件转发；零 `RelayCommand(_ => { })` 空壳，符合 UI-SPEC §3
 - [ ] StatusBar 绑定 BackgroundTaskManager.Current（ProgressText/Percent/CancelCommand）—— **`MainWindow.xaml` 中无任何 StatusBar / ProgressBar，全仓库搜不到 `BackgroundTaskManager`；UI-SPEC §2 要求的全局状态栏未实现，见 §11 偏差 D8**
 - [x] ThemeService（Light/Dark/System）
 - 验收：9 项导航切换正常；侧边栏可折叠；深浅主题即时生效
@@ -429,21 +429,44 @@
 
 ## M4 更新控制
 
-### T4.1 策略与服务双层开关  [ ]  1 天
-- [ ] 风险分级：Policy 层 L1；Service 层 L2，默认关闭且设置页单独二次确认
-- [ ] WindowsUpdateControlService.SetMode(Auto / NotifyOnly / Disabled)
+### T4.1 策略与服务双层开关  [~]  1 天
+- [x] 风险分级：Policy 层 L1；Service 层 L2，默认关闭且设置页单独二次确认
+  （`IsServiceLayerEnabled` 默认 false，打开走 `ConfirmServiceLayerChange`，文案明写"安全补丁不再自动安装"）
+- [x] WindowsUpdateControlService.SetMode(Auto / NotifyOnly / Disabled)
   - Policy 层：HKLM\SOFTWARE\Policies\Microsoft\Windows\WindowsUpdate\AU（NoAutoUpdate / AUOptions）
-  - Service 层：wuauserv / UsoSvc / DoSvc / 计划任务 \Microsoft\Windows\WindowsUpdate\*
-- [ ] 操作前 JSON 快照（键值+服务位+任务状态）→ 一键还原
-- [ ] UI：三档单选卡 + 当前实际状态徽章 + [恢复默认]
-- 验收：三模式切换重启后仍生效；还原后与默认一致
+  - Service 层：wuauserv / UsoSvc / 计划任务 \Microsoft\Windows\UpdateOrchestrator\* 与 \WindowsUpdate\*
+    **DoSvc 不参与控制**（只做 P2P 分发，停它不等于停更新），`ExcludedTaskPaths` 记录有意排除的
+    Reboot_AC / Reboot_Battery / USO_UxBroker（禁掉等于把系统改坏，不是"控制更新"）
+- [x] 操作前 JSON 快照（键值 + 服务启动类型 + 计划任务状态三类）→ 一键还原
+- [x] UI：三档单选卡（设置页）+ 当前实际状态徽章 + [恢复默认] / [复制快照路径] / [立即自检]
+- [~] 验收：三模式切换重启后仍生效 —— **写入路径已实现，跨重启生效尚未真机验证**（需提权，见下）
+- 实现要点（踩过的坑，改动前务必先读）：
+  1. **读不到 ≠ 已应用**。读取失败必须记 null 并由 `UpdateControlItem.IsReadable` 判"不可读"，
+     否则自检会长期误报"被系统回滚"。
+  2. **注册表读必须吞 `SecurityException`**：`OpenSubKey` 在"键存在但无读权限"时**抛异常**，
+     只在键不存在时返回 null。真机探针首次运行即在此崩溃。
+  3. **`ServiceController` 在 .NET 8 已拆成独立 NuGet 包**，为一个"读启动类型 + 停服务"引入新依赖
+     不划算；改用 `advapi32` P/Invoke（`OpenSCManager`/`OpenService`/`ControlService`），
+     句柄一律 `CloseServiceHandle` 释放。也不用 `sc.exe`（沙箱黑名单 + 闪控制台窗口）。
+  4. **`wuauserv` 的可更新启动类型是 Manual(3) 而非 Automatic(2)**：Win10 1709 起由 UsoSvc 按需触发，
+     设成 Automatic 反而偏离系统默认，还原时会被判"没还原干净"。
+  5. **`DeriveMode` 必须看 AUOptions，不能只看 NoAutoUpdate**。实测本机 `NoAutoUpdate` 缺失但
+     `AUOptions=2`，Windows 真实行为是"通知但不自动安装"，只看 NoAutoUpdate 会误报成"自动更新"。
+     判定分界线是"会不会不经询问就装上"：1=从不查→Disabled，2/3→NotifyOnly，4→Automatic。
+  6. **Automatic 档靠"删除键值"表达**，不是写 0 —— 写 0 会让键长期留在注册表里产生歧义。
+  7. **正常"可更新"档下 `Verify` 必须静默**：早期版本按当前档位反推期望值，在从未改过的机器上
+     把 UsoSvc 的 Auto 误报成漂移。改为快照记录 `TargetMode`，无目标档位即返回空漂移。
 
-### T4.2 WaaSMedic 对抗与自检  [ ]  1 天
-- [ ] 风险分级：L3，仅实验分支与灰度专用构建开放；不做永久性权限破坏
-- [ ] WaaSMedicSvc 优先记录可还原的注册表权限调整方案（实验性开关，默认关，文档化失败概率与手动恢复步骤）
-- [ ] 后台自检 Timer：检测被系统回滚 → 状态栏告警 + 一键重新应用
-- [ ] 兼容矩阵：Win10 19045 / Win11 22621 / 26100
-- 验收：Home 版展示局限提示（无组策略时仍走注册表方案）
+### T4.2 WaaSMedic 对抗与自检  [~]  1 天
+- [x] 风险分级：L3，仅实验分支与灰度专用构建开放；不做永久性权限破坏
+- [~] WaaSMedicSvc 优先记录可还原的注册表权限调整方案 —— **改为记录可行性与风险，未实现写入**
+  （永久性权限破坏不符合"不做永久性权限破坏"红线；改为 T4.1 的漂移检测 + 一键重新应用来对抗）
+- [x] 后台自检 `VerifyAsync`：检测被系统回滚 → 状态栏告警横幅 + [重新应用]
+  （`CheckDriftAsync` 不占用 IsBusy，避免自检期间用户点不动按钮）
+- [x] 兼容矩阵：`DescribeCompatibility()` 按 Build 判定 Win10/Win11 + 服务层可用性；
+  **Home 版没有 gpedit 但仍会读取 Policies 键**，注册表方案在 Home 上同样有效
+- [ ] 后台自检 Timer（自动轮询）—— 目前仅手动 [立即自检]，自动轮询未接
+- 验收：Home 版展示局限提示 —— 兼容矩阵数据已备，UI 尚未展示该提示
 
 ---
 
@@ -660,7 +683,7 @@
 | T0.0 | 仓库建立 |  | [x] |  | **2026-09-23 已推送并建 `dev` 分支**（`TiaYahng/syssuite`）；仍缺分支保护 |
 | T0.1 | 解决方案结构 |  | [~] |  | 5 个 C# 项目 + 1 个 C++ 项目齐全；Core 内既有 P/Invoke 未归拢到 Interop |
 | T0.2 | Interop 通路 |  | [x] |  | **已完成**：C++ 本机编译通过（`/W4` 零告警，导出 4 符号）；FFI 冒烟真实执行全绿；仅 Catch2 待 CI |
-| T0.3 | UI 壳 9 标签 |  | [x] |  | 9 页可用；ViewModel 仍空壳（偏差 D1） |
+| T0.3 | UI 壳 9 标签 |  | [x] |  | 9 页可用；ViewModel 已承载逻辑（偏差 D1 已闭环，2026-09-23） |
 | T0.4 | 基础设施 + 崩溃闭环 |  | [x] |  |  |
 | T0.5 | CI 完整版 |  | [~] |  | native job（C++ 构建 + Catch2 + FFI 冒烟）已加；**2026-09-23 首次真正触发**（此前 D5：CI 监听 `main,dev` 而远端只有 `master`，从未跑过）；C++ 编译结果待观察 |
 | T0.6 | 清单/提权/DPI |  | [x] |  | 版本资源与品牌资产（多尺寸 ico）已落地；`app.manifest` 仍未声明 x64 |
@@ -668,7 +691,7 @@
 | T1.1~T1.6 | M1 六项 |  | [x] |  | **M1 全部落地**：T1.1（含数据质量收敛）/T1.2 温度传感器/T1.3 SMART/T1.4 监控（含折线图与暂停/时间窗）/T1.5 基准测试/T1.6 报告导出均已完成。**2026-09-23 提权真机闭环**：SMART 与传感器均读到真实数值（见 T1.2/T1.3 验收行）；新增运行期自提权 `IElevationService`。遗留：CPU 温度在本机需安装 PawnIO（D15，非代码缺陷）；Catch2 侧待 CI（D11） |
 | T2.1~T2.7 | M2 七项 |  | [x] |  | 七项均有真实实现 |
 | T3.1~T3.5 | M3 五项 |  | [~] |  | T3.1/T3.3/T3.4 完成；T3.2 托管替代且未实测；T3.5 冻结 |
-| T4.1/T4.2 | M4 |  | [ ] |  | 未开工 |
+| T4.1/T4.2 | M4 |  | [~] |  | T4.1 双层开关 + 快照/还原 + 设置页 UI 已落地；T4.2 漂移自检已落地。**未接**：跨重启生效的真机验证（需提权）、后台自检 Timer、Home 版局限提示 UI。WaaSMedicSvc 改为仅记录方案 |
 | T5.1~T5.6 | M5 六项 |  | [ ] |  | 未开工；T5.6 高风险 |
 | T6.1~T6.5 | M6 五项 |  | [ ] |  | 未开工 |
 | T7.0~T7.8 | M7 九项 |  | [ ] |  | 未开工；T7.6 合规必做 |
@@ -708,7 +731,7 @@ MVP0 链 ─ T0.0→T0.1→T0.2→T0.4→T0.6→T0.3→T0.5→T2.1→T1.1/T1.4�
 
 | ID | 偏差 | 影响 | 建议 |
 |---|---|---|---|
-| D1 | **9 个 ViewModel 至今仍是空壳**（`RelayCommand(_ => { })` 空实现），业务逻辑写在 code-behind（`UninstallerPage.xaml.cs`、`DiskCleanerView.*.cs`、`DashboardPage.xaml.cs`、`SystemInfoPage.xaml.cs`） | 违反 UI-SPEC §3「ViewModel 必须继承 `PageViewModelBase`、禁止在 code-behind 写业务逻辑」；M5/M6 开工后将演变为大范围重构 | 在 M5/M6 之前补 `PageViewModelBase` 并把现有 code-behind 逻辑迁入 |
+| D1 | **已解决（2026-09-23）**：新增 `PageViewModelBase`（`IsBusy`/`BusyText`/`HasError`/`ErrorText`/`DiagnosticId`/`RefreshCommand`/`CancelCommand` + `RunBusyAsync` 忙碌门控），9 个 ViewModel 全部继承它；`UninstallerPage`/`DiskCleanerView`/`DashboardPage`/`SystemInfoPage`/`SettingsPage` 的 code-behind 业务逻辑已迁入，删除 7 个 partial（`UninstallerPage.Extras/.Icons/.Interaction/.Rows`、`DiskCleanerView.Actions/.Selection/.Status`）。交互副作用抽象为 `IUninstallerInteractions`/`ICleanerInteractions`/`IUpdateControlInteractions`，ViewModel 无 WPF 依赖可单测。零 `RelayCommand(_ => { })` 空壳 | 无（已闭环）。**副作用**：CA1001 要求持有 `IDisposable` 字段的类型自身实现 `IDisposable`，5 个页面因此加了 `IDisposable` 并在 `Unloaded` 中先解绑事件再 Dispose | 后续新页面一律直接继承 `PageViewModelBase` |
 | D2 | **既有 P/Invoke 仍散落在 Core 各服务内**（`IconCacheService.Extract`、`MsiAppEnumerator.Native`、`UsnJournalMonitor`、`ForceDeleteService.Native`、`MftFileIndexService`）。`SysSuite.Interop` 已于 2026-09-22 补建，但**只有新能力走这层，旧调用未迁移** | 违反 T0.1 的分层约定与 G10；无法统一审计原生调用的错误码/内存所有权 | 按 T8.1 分批把旧 P/Invoke 迁到 `SysSuite.Interop`，每迁一处补对应错误码映射 |
 | D3 | **计划用 C++ 原生、实际用托管替代**：主板/BIOS 走 WMI 而非 `Native_GetSmbios` | 功能可用，但拿不到 WMI 不覆盖的固件细节；T1.1 验收标准仍未完全达成 | 可接受为 MVP0 方案，v1 前按 T1.1 补原生通道 |
 | D4 | **MFT 扫描用 C# P/Invoke 直接调 `DeviceIoControl`**（`MftFileIndexService`），而非计划的 `Native_ScanVolume` C++ 导出 | 绕过 G10 的 ABI 契约要求；§6 的「150 万文件 < 8s」预算从未实测 | T0.2 补建后按 T3.2 重构，并补性能实测 |
@@ -722,9 +745,12 @@ MVP0 链 ─ T0.0→T0.1→T0.2→T0.4→T0.6→T0.3→T0.5→T2.1→T1.1/T1.4�
 | D12 | **已解决（2026-09-23）**：原生 DLL 已纳入常规构建流程。`SysSuite.Interop.csproj` 的 `BuildNativeModule` 目标（`AfterTargets="Build"`）负责构建，`SysSuite.Tests.csproj` 的 `CopyNativeModuleForFfiTests` 目标由消费方自行拉取 DLL 到输出目录。从干净状态一次 `dotnet build` 即产出并部署，`dotnet test` 138 通过 / 0 跳过。**关键坑**：`BeforeTargets="_CopyFilesToOutputDirectory"` 不是有效挂载点（目标被静默跳过，连 Message 都不打印）；`pwsh -File` 不接受含 `..` 的路径（退出码 64）；`$(MSBuildThisFileDirectory)` 以反斜杠结尾需上溯两级。详见 §11.4 | 无（已闭环） | 见 §11.4 |
 | D13 | **基准测试用托管替代 C++ 内核**（2026-09-23）：计划要求在 `bench/` 写 C++（`SetThreadAffinity` 绑核、`FILE_FLAG_NO_BUFFERING`），实际以 C# 实现（`BenchmarkService` + `.Measure.cs` + `.Disk.cs`），理由是复用已有 .NET 构建链、避免为一个纯计算模块再维护一套 C++ 编译与 ABI | ① **CPU 未绑核**，调度抖动会进入分数，验收项「双跑方差 < 3%」比绑核版更难保证；② 磁盘用 `FileOptions.WriteThrough` 而非 `FILE_FLAG_NO_BUFFERING`，两者对页缓存与对齐的要求不同，绝对吞吐与 CrystalDiskMark 不可直接对比（仅适合横向自比） | 可接受为 MVP0 方案：跑分定位是"自机历史对比"而非权威横评。若 v1 需要对外可比分数，按原计划补 `Native_Benchmark*` 导出并复用现有 ABI |
 | D14 | **`System.Management` 被传递依赖强制升版**（2026-09-23）：`LibreHardwareMonitorLib` 0.9.6 要求 `System.Management` ≥ 10.0.2，中央包管理由 8.0.0 升至 **10.0.2** | WMI 相关 API 出现跨大版本变更（NU1109 已确认可解析）；下游若按 8.0 写法使用 `ManagementObjectSearcher` 需复核 | 已在 `PerformanceMonitorService` 侧复核并保持原用法可用；`System.Management` 属 Windows 专用包，不引入跨平台风险 |
-| D15 | **CPU 温度需要 PawnIO 内核驱动**（2026-09-23，已闭环为"显式诊断"）：`LibreHardwareMonitorLib` 0.9.6 起把内核态访问层从 WinRing0 换成 **PawnIO**（WinRing0 因被 Defender 判为易受攻击驱动而全量下架）。官方维护者原话："PawnIO provides the low level hardware layer. If you don't install it, LibreHardwareMonitor could not read or write any value (including CPU values)." **本机未安装 PawnIO**（`HKLM\SYSTEM\CurrentControlSet\Services\PawnIO` 不存在、`System32\drivers\PawnIO.sys` 不存在），实测 CPU 的 39 个传感器中**全部温度/倍频/功耗均为 `null`**，而 GPU（NVAPI）与 NVMe（IOCTL）照常可读 —— 这种"半可用"状态极易被误判为程序 bug | CPU 温度在本机永远显示 "--"；若不加说明，用户会认为程序损坏。**不是代码缺陷**，是缺一个第三方内核驱动 | 已实现 `SensorDiagnostics.IsPawnIoAvailable()` + `SensorSnapshot.CpuTemperatureNeedsKernelDriver`，UI 在检测到该状态时显式提示"请从 pawnio.eu 安装并重启"；用户安装 PawnIO 后无需改代码即可读到 CPU 温度。**是否把 PawnIO 作为安装包可选组件分发，待定**（涉及第三方驱动的分发合规与签名，归 T7.x 决策） |
+| D15 | **已闭环（2026-09-23 晚）：PawnIO 已安装，CPU 温度可在提权后读到。** 原偏差见下（保留备查）；**新增一条独立的第二失败模式**：`winget install` 装好 PawnIO v2.2.0 后，非提权进程仍读到 CPU 全部传感器为 `null`，提权后读到 **47 个传感器**（CPU Core 100℃ / Power 30.38W / Clock 3688MHz）。原因是 **PawnIO 是内核驱动，装载与通信都需要管理员权限** —— 装好驱动 ≠ 能读。另**探测方式已修正**：PawnIO 的 `.sys` **不在 `System32\drivers\`**，而在 `System32\DriverStore\FileRepository\pawnio.inf_amd64_<hash>\`，由服务 `ImagePath` 指向；只查 `System32\drivers` 会在已安装的机器上误判为"未安装" | CPU 温度缺读数现在有**两种**成因，必须分开提示：① 未装驱动 → "请从 pawnio.eu 安装"；② 已装但未提权 → "请以管理员身份重启本程序"。混为一谈会让用户装完驱动仍看到 "--" 却得不到下一步指引 | 已按两种模式分别实现提示（`SystemInfoViewModel.DescribeCpuTemperatureGap` 双分支 + `CpuTemperatureNeedsElevation`）；`SensorDiagnostics` 改为按服务 `ImagePath` 解析路径 + DriverStore 回退。**PawnIO 是否随安装包分发仍待定**（第三方驱动的分发合规与签名，归 T7.x 决策） |
+| D15（原） | **CPU 温度需要 PawnIO 内核驱动**（2026-09-23）：`LibreHardwareMonitorLib` 0.9.6 起把内核态访问层从 WinRing0 换成 **PawnIO**（WinRing0 因被 Defender 判为易受攻击驱动而全量下架）。官方维护者原话："PawnIO provides the low level hardware layer. If you don't install it, LibreHardwareMonitor could not read or write any value (including CPU values)." **本机未安装 PawnIO**（`HKLM\SYSTEM\CurrentControlSet\Services\PawnIO` 不存在、`System32\drivers\PawnIO.sys` 不存在），实测 CPU 的 39 个传感器中**全部温度/倍频/功耗均为 `null`**，而 GPU（NVAPI）与 NVMe（IOCTL）照常可读 —— 这种"半可用"状态极易被误判为程序 bug | CPU 温度在本机永远显示 "--"；若不加说明，用户会认为程序损坏。**不是代码缺陷**，是缺一个第三方内核驱动 | 已实现 `SensorDiagnostics.IsPawnIoAvailable()` + `SensorSnapshot.CpuTemperatureNeedsKernelDriver`，UI 在检测到该状态时显式提示"请从 pawnio.eu 安装并重启"；用户安装 PawnIO 后无需改代码即可读到 CPU 温度。**是否把 PawnIO 作为安装包可选组件分发，待定**（涉及第三方驱动的分发合规与签名，归 T7.x 决策） |
 | D16 | **传感器聚合语义错误（已修复，2026-09-23）**：① `SystemInfoPage` 的 CPU 与 GPU 温度**都调 `MaxOf(SensorKind.Temperature)`**，导致 GPU Hot Spot（89.8℃）被当成 CPU 温度显示；② NVMe 的 `Warning Temperature`(80.0) / `Critical Temperature`(81.0) 是**固定门限常量**而非实时温度，混进"取最高温"后长期显示假高温；③ `IsPlausible` 温度上界设 150℃，会误删满载 GPU Hot Spot | 温度卡片展示的数字与真实硬件无关（指向显卡/门限常量）；`SensorReading` 缺少硬件分类字段，UI 只能按硬件名字字符串猜 | 已修复：新增 `SensorHardwareClass` 枚举（由 `HardwareType` 映射，服务层填写）与 `SensorSnapshot.MaxTemperatureOf(class)`；`IsThresholdSensor()` 剔除门限类传感器；温度上界放宽到 200℃。新增 15 项单元测试锁定语义（`SensorAggregationTests` + `SensorMappingTests`） |
 | D17 | **"虚拟机内不崩溃"从未验证**：T1.1 验收含"虚拟机内不崩溃"，`SensorSnapshot.Unavailable` 的降级路径也是为此设计的（`MarkUnsupported` / `Readings.Count == 0` 分支），但**本机无 Hyper-V 环境，该路径只用单元测试覆盖了逻辑，未在真实 VM 里跑过**。同理 T8.3 的"Hyper-V 兼容矩阵"未开工 | 虚拟机/无传感器主板的降级行为是**推断正确**而非实测正确；若 VM 里 `Computer.Open()` 抛出未预期的异常类型，`catch` 虽会兜住但文案可能误导 | 归入 T8.3（需 Hyper-V 环境）。在此之前，降级路径的单元测试是唯一保障；建议至少用 `WmiHardwareInfoService` 在 Windows Sandbox 里做一次冒烟 |
+| D19 | **图标抽取存在病态慢路径（已修复，2026-09-23）**：卸载器冷启动慢被误判为"枚举慢"，实测瓶颈在图标解析 —— 单条 `MPICH.NT.1.2.1` 占 8,901ms（整体 82%）。根因是其卸载命令推导到 `C:\WINDOWS\IsUninst.exe`（InstallShield 5/6 stub，**畸形 PE**），`ExtractAssociatedIcon` 在其上最坏耗时 **32,061ms**。修复四措：① 黑名单已知的 InstallShield/Nullsoft stub；② 按快捷方式打分择优而非逐条硬解；③ 图标抽取加**硬超时 5 秒**（2 秒会在并行测试负载下误杀正常 `testhost.exe`）；④ 结果入 `IconCacheService` 持久化 | 冷加载从 **23,565ms 降到 2,690ms（8.8x）**，病态单条 **32,061ms → 2,263ms**；超时兜底后任何单条都不会拖垮整页 | 已闭环（21 项测试：`IconShortcutScoringTests` + `UninstallerBenchmarkTests`）。**阈值 5 秒是实测折中，不要为"更快"下调到 2 秒** —— 会误杀正常进程 |
+| D20 | **M4 顶层设计修正（2026-09-23）**：初版 `Verify()` 按**当前**档位反推期望值，在从未改过的机器上把 `UsoSvc` 的 Auto 误报成"被系统回滚"（真机探针实测 1 条假漂移）；初版 `DeriveMode` 只看 `NoAutoUpdate`，在本机 `AUOptions=2` 的形态下误报成"自动更新"。另 `RegistryKey.OpenSubKey` 在"键存在但无读权限"时**抛 `SecurityException`**（非返回 null），真机首次运行直接崩溃 | 三条都是"看起来能用、实际给出错误结论"，比崩溃更危险 —— 用户会据此误判系统状态 | 已修复：快照增记 `TargetMode` 作为自检基准（无目标档位即静默）；`DeriveMode` 改为 `ExpectedValues` 的严格逆映射；所有注册表读包 try/catch 吞 `SecurityException`。详见 M4 章"实现要点" 7 条 |
 | D18 | **`installer/` 为空，无安装包**（2026-09-23 仍未动）：MVP0 验收明写"安装包可运行"，但 T7.3（打包与自更新）未开工，`installer/` 目录为空 | MVP0 无法交付给真实用户；`app.manifest` 的提权声明（`requireAdministrator`）也从未在**打包后**的 exe 上验证过 —— 目前只在开发态 exe 上验证过 | 按 T7.3 补 Inno Setup 配置；打包后必须重新验证提权与首次启动流程（开发态 manifest 生效 ≠ 安装包内生效） |
 
 ### 11.2 当前门禁状态（2026-09-23 实测）
@@ -733,7 +759,7 @@ MVP0 链 ─ T0.0→T0.1→T0.2→T0.4→T0.6→T0.3→T0.5→T2.1→T1.1/T1.4�
 |---|---|---|
 | 源码行数 | `pwsh ./rules/Check-SourceFileSize.ps1` | **通过**（EXIT=0）；`LibreHardwareSensorService.cs` 曾因新增分类逻辑涨到 373/316，已拆出 `.Mapping.cs`（收集+映射）与 `SensorDiagnostics.cs`，主文件降回 221 行 |
 | 构建 | `dotnet build -c Debug` | 通过，0 警告 0 错误（**干净状态下一次 build 即自动构建并部署原生模块**，D12 已闭环） |
-| 测试 | `dotnet test -c Debug --no-build` | 通过，**138 项全绿、0 跳过**（0 跳过即证明 FFI 冒烟真实执行） |
+| 测试 | `dotnet test -c Debug --no-build` | 通过，**174 项全绿、0 跳过**（0 跳过即证明 FFI 冒烟真实执行）。含 M4 新增 21 项、D1 重构后回归项；注：`IconCacheTests.IconCacheResolvesUnquotedExecutableWithIconIndex` 在并行满载下偶发失败，单独重跑必过（图标抽取的时序 flake，非逻辑缺陷） |
 | 原生构建 | `pwsh ./rules/Build-Native.ps1 -Configuration Release -Deploy` | **通过**；MSVC 14.51 `/W4` 零告警，x64，导出 `Native_AbiVersion` / `Native_Version` / `Native_GetSmbios` / `Native_ScanVolume`。**常规开发已无需手工执行**（build 自动触发） |
 | 原生构建（cmake） | `cmake -S src/SysSuite.Native -B build/native -A x64` | **本机失败**：`No CMAKE_CXX_COMPILER could be found`（偏差 D10）；已不作为构建入口 |
 | 提权真机探针 | `pwsh ./rules/Probe-Elevated.ps1 -Probe All` | **通过**；SMART 读到型号/健康/温度 54℃/寿命 98%/通电 7269h；传感器读到 GPU Core 69℃ / Hot Spot 79.8℃ / SSD Composite 55℃ |

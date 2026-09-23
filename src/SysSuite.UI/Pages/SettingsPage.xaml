@@ -44,6 +44,82 @@
                     <CheckBox x:Name="ForceDeleteCheckBox" Grid.Column="1" Checked="OnForceDeleteChanged" Unchecked="OnForceDeleteChanged" />
                 </Grid>
             </Border>
+
+            <!-- M4 T4.1 更新控制 -->
+            <Border Margin="0,20,0,0" Padding="16" Background="{DynamicResource App.Background}" BorderBrush="{DynamicResource App.Border}" BorderThickness="1" CornerRadius="6">
+                <StackPanel>
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <StackPanel>
+                            <TextBlock Text="Windows 更新控制" Foreground="{DynamicResource App.Text}" FontWeight="SemiBold" />
+                            <TextBlock Text="选择系统检查与安装更新的方式。可随时一键还原。" Margin="0,4,0,0" Foreground="{DynamicResource App.SubtleText}" TextWrapping="Wrap" />
+                        </StackPanel>
+                        <Border Grid.Column="1" Padding="10,4" CornerRadius="10" VerticalAlignment="Top"
+                                Background="{DynamicResource App.SafeSoft}" BorderBrush="{DynamicResource App.Safe}" BorderThickness="1">
+                            <TextBlock x:Name="UpdateScopeBadge" Foreground="{DynamicResource App.SafeText}" FontSize="12" />
+                        </Border>
+                    </Grid>
+
+                    <TextBlock x:Name="UpdateCurrentStateText" Margin="0,12,0,0" Foreground="{DynamicResource App.SubtleText}" TextWrapping="Wrap" />
+
+                    <RadioButton x:Name="UpdateModeAutomatic" GroupName="UpdateMode" Margin="0,12,0,0"
+                                 Checked="OnUpdateModeChecked" Tag="1">
+                        <StackPanel>
+                            <TextBlock Text="自动更新（系统默认）" Foreground="{DynamicResource App.Text}" />
+                            <TextBlock Text="有更新就自动下载并安装。安全性最高，但可能在你忙时重启。" Foreground="{DynamicResource App.SubtleText}" TextWrapping="Wrap" />
+                        </StackPanel>
+                    </RadioButton>
+
+                    <RadioButton x:Name="UpdateModeNotifyOnly" GroupName="UpdateMode" Margin="0,10,0,0"
+                                 Checked="OnUpdateModeChecked" Tag="2">
+                        <StackPanel>
+                            <TextBlock Text="仅通知，不自动安装" Foreground="{DynamicResource App.Text}" />
+                            <TextBlock Text="会检查更新并通知你，但不会自动下载安装。适合自己掌控节奏。" Foreground="{DynamicResource App.SubtleText}" TextWrapping="Wrap" />
+                        </StackPanel>
+                    </RadioButton>
+
+                    <RadioButton x:Name="UpdateModeDisabled" GroupName="UpdateMode" Margin="0,10,0,0"
+                                 Checked="OnUpdateModeChecked" Tag="3">
+                        <StackPanel>
+                            <TextBlock Text="完全停用自动更新" Foreground="{DynamicResource App.Risky}" />
+                            <TextBlock Text="连检查都停止。长期停更意味着安全补丁不再进来，请自行判断风险。" Foreground="{DynamicResource App.RiskyText}" TextWrapping="Wrap" />
+                        </StackPanel>
+                    </RadioButton>
+
+                    <CheckBox x:Name="UpdateServiceLayerCheckBox" Margin="0,14,0,0"
+                              Checked="OnUpdateServiceLayerChanged" Unchecked="OnUpdateServiceLayerChanged">
+                        <StackPanel>
+                            <TextBlock Text="同时修改服务与计划任务层（高风险，默认关闭）" Foreground="{DynamicResource App.Risky}" />
+                            <TextBlock x:Name="UpdateServiceLayerHint" Foreground="{DynamicResource App.SubtleText}" TextWrapping="Wrap" />
+                        </StackPanel>
+                    </CheckBox>
+
+                    <Border x:Name="UpdateDriftBanner" Margin="0,12,0,0" Padding="10" CornerRadius="4" Visibility="Collapsed"
+                            Background="{DynamicResource App.CautionSoft}" BorderBrush="{DynamicResource App.Caution}" BorderThickness="1">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <TextBlock x:Name="UpdateDriftText" Foreground="{DynamicResource App.CautionText}" TextWrapping="Wrap" VerticalAlignment="Center" />
+                            <Button Grid.Column="1" Content="重新应用" Padding="10,4" Margin="10,0,0,0" Click="OnUpdateReapplyClick" />
+                        </Grid>
+                    </Border>
+
+                    <StackPanel Orientation="Horizontal" Margin="0,14,0,0">
+                        <Button Content="应用设置" Padding="14,6" Click="OnUpdateApplyClick" />
+                        <Button Content="恢复默认" Padding="14,6" Margin="8,0,0,0" Click="OnUpdateRestoreClick" />
+                        <Button Content="复制快照路径" Padding="14,6" Margin="8,0,0,0" Click="OnUpdateCopySnapshotClick" />
+                        <Button Content="立即自检" Padding="14,6" Margin="8,0,0,0" Click="OnUpdateVerifyClick" />
+                    </StackPanel>
+
+                    <TextBlock x:Name="UpdateSnapshotText" Margin="0,10,0,0" Foreground="{DynamicResource App.SubtleText}" TextWrapping="Wrap" FontSize="12" />
+                    <TextBlock x:Name="UpdateStatusText" Margin="0,6,0,0" Foreground="{DynamicResource App.SubtleText}" TextWrapping="Wrap" />
+                </StackPanel>
+            </Border>
         </StackPanel>
     </Border>
 </UserControl>
