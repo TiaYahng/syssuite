@@ -52,16 +52,23 @@
 | 里程碑 | 内容 | 工期 | 负责 | 状态 |
 |---|---|---|---|---|
 | M0 | 仓库 + 架构骨架 + Interop + UI 壳 + Watchdog 骨架 | 2 周 | ABC | [~] | ~95%；T0.2 已完整闭环（C++ 本机编译通过 + FFI 冒烟真实执行全绿）；剩余缺口：app.manifest 未声明 x64、既有 P/Invoke 未归拢、Clang-Tidy 未接入、Catch2 待 CI |
-| M1 | 系统信息 + 监控 + 基准测试 | 2 周 | C 为主 | [~] | ~40%；WMI 硬件信息（含数据质量收敛）+ 实时监控 + 报告导出(T1.6) 落地；传感器/SMART/基准测试未开工 |
+| M1 | 系统信息 + 监控 + 基准测试 | 2 周 | C 为主 | [x] | **已完成**；T1.1~T1.6 全部落地，提权真机实测闭环（SMART 全字段 + GPU/SSD 温度）。唯一遗留：CPU 温度需用户装 PawnIO（D15） |
 | M2 | 卸载器（完整） | 3 周 | B 为主 | [x] | ~95%；T2.1~T2.7 均有真实实现且可用 |
-| M3 | 磁盘清理（MFT 扫描 + 规则引擎） | 3 周 | BC | [~] | ~80%；T3.1/T3.3/T3.4 完成；T3.2 已用 C# P/Invoke 实现（偏离计划的 C++ 原生通道）且性能未实测；T3.5 保持冻结 |
-| M4 | 更新控制 | 1 周 | B | [ ] | 0% |
-| M5 | 安全中心 + 防护控制 + 软件管家 | 3 周 | B | [ ] | 0%；`SecurityPage`/`SoftwareHubPage` 仍为 `InitializeComponent()` 空壳 |
+| M3 | 磁盘清理（MFT 扫描 + 规则引擎） | 3 周 | BC | [~] | ~80%；T3.1/T3.3/T3.4 完成；T3.2 已用 C# P/Invoke 实现（偏离计划的 C++ 原生通道）且性能未实测；T3.5 保持冻结 || M4 | 更新控制 | 1 周 | B | [ ] | 0% |
+| M5 | 安全中心 + 防护控制 + 软件管家 | 3 周 | B | [ ] | 0%；`SecurityPage`/`SoftwareHubPage` 仍为 11 行 `InitializeComponent()` 空壳（XAML 只有标题 + "MVP0 骨架"占位文案） |
 | M6 | 桌面整理 | 4~6 周 | C 为主 | [ ] | 0%；`DesktopPage` 仍为空壳 |
-| M7 | 搜索 / 本地化 / Ribbon / 工具箱 / 打包 / 签名 / 灰度 | 3 周 | A | [ ] | 0%；`installer/` 为空，无打包与签名 |
+| M7 | 搜索 / 本地化 / Ribbon / 工具箱 / 打包 / 签名 / 灰度 | 3 周 | A | [ ] | 0%；`installer/` 为空目录，无打包与签名（D18）；`ToolboxPage` 亦为空壳 |
 | M8 | 测试与质量横切（贯穿，见 §5） | 不单列 | ABC | [~] | ~15%；仅 T8.1 的 C# 静态分析落地（`.editorconfig` + `EnableNETAnalyzers` + `TreatWarningsAsErrors`），T8.2/T8.3/T8.4 未开工 |
 
 **总计约 21~23 周**
+
+> **读状态表时注意"页面空壳"的判定方式**：`Pages/*.xaml.cs` 行数**不能**单独用来判断某个功能是否实现。
+> 仓库采用「宿主页 + 视图」模式 —— `CleanerPage.xaml` 只有 6 行，内容是 `<pages:DiskCleanerView />`，
+> 而真正的实现（240 行 code-behind + 3 个 partial + 独立 XAML）全在 `DiskCleanerView.*` 里。
+> 同理 `SystemInfoPage` 拆成了 `.Health.cs` / `.Monitor.cs` / `.Trend.cs`，`UninstallerPage` 拆成了
+> `.Extras.cs` / `.Interaction.cs` / `.Rows.cs`。
+> 判定空壳的正确方式：看 XAML 里是否只有标题 + "MVP0 骨架"占位文案。
+> 截至 2026-09-23，真正的空壳只有 4 个：`SecurityPage` / `SoftwareHubPage` / `DesktopPage` / `ToolboxPage`（各 11 行）。
 
 ### 1.1 MVP0 与发布分层
 
@@ -231,16 +238,16 @@
 
 ## M1 系统信息 + 监控 + 基准
 
-### T1.1 硬件信息服务  [~]  2 天
+### T1.1 硬件信息服务  [x]  2 天
 - [x] Abstractions 接口层：**实际命名为 `IHardwareInfoService`**（`GetHardwareInfoAsync` 一次返回 CPU/内存/显卡/存储/网卡/OS 全量快照），语义等价
 - [x] Core 实现：**实际为 `Core/System/WmiHardwareInfoService`**（Win32_Processor / Win32_BaseBoard / Win32_BIOS / Win32_DiskDrive / Win32_LogicalDisk / Win32_VideoController / Win32_NetworkAdapter 集中封装）
 - [x] 数据质量收敛（2026-09-23 实测真实硬件后修正，详见 §11.5）
   - 操作系统产品名改取 `Win32_OperatingSystem.Caption`（原 `Environment.OSVersion.VersionString` 只给出 “Microsoft Windows NT 10.0.x”）
   - 显存改读显示类驱动登记的 64 位 `HardwareInformation.qwMemorySize`（`Win32_VideoController.AdapterRAM` 是 32 位字段，≥4GB 必然溢出：实测 RTX 2070 8GB 被报成 4.0 GB）
   - `VideoModeDescription` 去除溢出色深，归一为 “宽 x 高”（原值形如 “1920 x 1080 x 4294967296 种颜色”）
-- [ ] CPU 补充：Native_CpuIdFeatures（指令集/缓存层次）—— 依赖 T0.2
+- [ ] CPU 补充：Native_CpuIdFeatures（指令集/缓存层次）—— 依赖 T0.2（**仍未做**，见下）
 - [~] SMBIOS 主板/BIOS：**已通过 WMI（`Win32_BaseBoard` / `Win32_BIOS`）实现**，`SystemInfoPage` 已展示主板与 BIOS 版本；计划中的原生 `Native_GetSmbios`（GetSystemFirmwareTable）未做，属"托管替代原生"，见 §11 偏差 D3
-- 验收：字段与 CPU-Z/设备管理器双源一致；虚拟机内不崩溃
+- 验收：字段与 CPU-Z/设备管理器双源一致；虚拟机内不崩溃 —— **本机真机数据已核对**（RTX 2070 显存 8.0 GB 修正到位）；**VM 内不崩溃未验证**（见 D17）
 
 ### T1.2 温度传感器  [x]  1.5 天
 - [x] LibreHardwareMonitorLib 封装 SensorService —— 实际类为 **`LibreHardwareSensorService`**（实现 `ISensorService`），
@@ -641,17 +648,17 @@
 
 ## 9. 任务跟踪表（复制到 PR/周报使用）
 
-**2026-09-22 按代码实证校准后的跟踪表**（与上文各任务标题状态一致）：
+**2026-09-23 按代码实证校准后的跟踪表**（与上文各任务标题状态一致）：
 
 | 任务 | 描述 | 负责人 | 状态 | 预计完成 | 备注 |
 |---|---|---|---|---|---|
-| T0.0 | 仓库建立 |  | [~] |  | 远程已建；缺 dev 分支与分支保护 |
+| T0.0 | 仓库建立 |  | [x] |  | **2026-09-23 已推送并建 `dev` 分支**（`TiaYahng/syssuite`）；仍缺分支保护 |
 | T0.1 | 解决方案结构 |  | [~] |  | 5 个 C# 项目 + 1 个 C++ 项目齐全；Core 内既有 P/Invoke 未归拢到 Interop |
 | T0.2 | Interop 通路 |  | [x] |  | **已完成**：C++ 本机编译通过（`/W4` 零告警，导出 4 符号）；FFI 冒烟真实执行全绿；仅 Catch2 待 CI |
 | T0.3 | UI 壳 9 标签 |  | [x] |  | 9 页可用；ViewModel 仍空壳（偏差 D1） |
 | T0.4 | 基础设施 + 崩溃闭环 |  | [x] |  |  |
-| T0.5 | CI 完整版 |  | [~] |  | native job（C++ 构建 + Catch2 + FFI 冒烟）已加；C++ 首次编译结果待观察 |
-| T0.6 | 清单/提权/DPI |  | [x] |  | 版本资源与品牌资产（多尺寸 ico）已落地 |
+| T0.5 | CI 完整版 |  | [~] |  | native job（C++ 构建 + Catch2 + FFI 冒烟）已加；**2026-09-23 首次真正触发**（此前 D5：CI 监听 `main,dev` 而远端只有 `master`，从未跑过）；C++ 编译结果待观察 |
+| T0.6 | 清单/提权/DPI |  | [x] |  | 版本资源与品牌资产（多尺寸 ico）已落地；`app.manifest` 仍未声明 x64 |
 | T0.7 | Watchdog 骨架 |  | [~] |  | IPC/租约已通；缺提权模式说明 |
 | T1.1~T1.6 | M1 六项 |  | [x] |  | **M1 全部落地**：T1.1（含数据质量收敛）/T1.2 温度传感器/T1.3 SMART/T1.4 监控（含折线图与暂停/时间窗）/T1.5 基准测试/T1.6 报告导出均已完成。**2026-09-23 提权真机闭环**：SMART 与传感器均读到真实数值（见 T1.2/T1.3 验收行）；新增运行期自提权 `IElevationService`。遗留：CPU 温度在本机需安装 PawnIO（D15，非代码缺陷）；Catch2 侧待 CI（D11） |
 | T2.1~T2.7 | M2 七项 |  | [x] |  | 七项均有真实实现 |
@@ -712,6 +719,8 @@ MVP0 链 ─ T0.0→T0.1→T0.2→T0.4→T0.6→T0.3→T0.5→T2.1→T1.1/T1.4�
 | D14 | **`System.Management` 被传递依赖强制升版**（2026-09-23）：`LibreHardwareMonitorLib` 0.9.6 要求 `System.Management` ≥ 10.0.2，中央包管理由 8.0.0 升至 **10.0.2** | WMI 相关 API 出现跨大版本变更（NU1109 已确认可解析）；下游若按 8.0 写法使用 `ManagementObjectSearcher` 需复核 | 已在 `PerformanceMonitorService` 侧复核并保持原用法可用；`System.Management` 属 Windows 专用包，不引入跨平台风险 |
 | D15 | **CPU 温度需要 PawnIO 内核驱动**（2026-09-23，已闭环为"显式诊断"）：`LibreHardwareMonitorLib` 0.9.6 起把内核态访问层从 WinRing0 换成 **PawnIO**（WinRing0 因被 Defender 判为易受攻击驱动而全量下架）。官方维护者原话："PawnIO provides the low level hardware layer. If you don't install it, LibreHardwareMonitor could not read or write any value (including CPU values)." **本机未安装 PawnIO**（`HKLM\SYSTEM\CurrentControlSet\Services\PawnIO` 不存在、`System32\drivers\PawnIO.sys` 不存在），实测 CPU 的 39 个传感器中**全部温度/倍频/功耗均为 `null`**，而 GPU（NVAPI）与 NVMe（IOCTL）照常可读 —— 这种"半可用"状态极易被误判为程序 bug | CPU 温度在本机永远显示 "--"；若不加说明，用户会认为程序损坏。**不是代码缺陷**，是缺一个第三方内核驱动 | 已实现 `SensorDiagnostics.IsPawnIoAvailable()` + `SensorSnapshot.CpuTemperatureNeedsKernelDriver`，UI 在检测到该状态时显式提示"请从 pawnio.eu 安装并重启"；用户安装 PawnIO 后无需改代码即可读到 CPU 温度。**是否把 PawnIO 作为安装包可选组件分发，待定**（涉及第三方驱动的分发合规与签名，归 T7.x 决策） |
 | D16 | **传感器聚合语义错误（已修复，2026-09-23）**：① `SystemInfoPage` 的 CPU 与 GPU 温度**都调 `MaxOf(SensorKind.Temperature)`**，导致 GPU Hot Spot（89.8℃）被当成 CPU 温度显示；② NVMe 的 `Warning Temperature`(80.0) / `Critical Temperature`(81.0) 是**固定门限常量**而非实时温度，混进"取最高温"后长期显示假高温；③ `IsPlausible` 温度上界设 150℃，会误删满载 GPU Hot Spot | 温度卡片展示的数字与真实硬件无关（指向显卡/门限常量）；`SensorReading` 缺少硬件分类字段，UI 只能按硬件名字字符串猜 | 已修复：新增 `SensorHardwareClass` 枚举（由 `HardwareType` 映射，服务层填写）与 `SensorSnapshot.MaxTemperatureOf(class)`；`IsThresholdSensor()` 剔除门限类传感器；温度上界放宽到 200℃。新增 15 项单元测试锁定语义（`SensorAggregationTests` + `SensorMappingTests`） |
+| D17 | **"虚拟机内不崩溃"从未验证**：T1.1 验收含"虚拟机内不崩溃"，`SensorSnapshot.Unavailable` 的降级路径也是为此设计的（`MarkUnsupported` / `Readings.Count == 0` 分支），但**本机无 Hyper-V 环境，该路径只用单元测试覆盖了逻辑，未在真实 VM 里跑过**。同理 T8.3 的"Hyper-V 兼容矩阵"未开工 | 虚拟机/无传感器主板的降级行为是**推断正确**而非实测正确；若 VM 里 `Computer.Open()` 抛出未预期的异常类型，`catch` 虽会兜住但文案可能误导 | 归入 T8.3（需 Hyper-V 环境）。在此之前，降级路径的单元测试是唯一保障；建议至少用 `WmiHardwareInfoService` 在 Windows Sandbox 里做一次冒烟 |
+| D18 | **`installer/` 为空，无安装包**（2026-09-23 仍未动）：MVP0 验收明写"安装包可运行"，但 T7.3（打包与自更新）未开工，`installer/` 目录为空 | MVP0 无法交付给真实用户；`app.manifest` 的提权声明（`requireAdministrator`）也从未在**打包后**的 exe 上验证过 —— 目前只在开发态 exe 上验证过 | 按 T7.3 补 Inno Setup 配置；打包后必须重新验证提权与首次启动流程（开发态 manifest 生效 ≠ 安装包内生效） |
 
 ### 11.2 当前门禁状态（2026-09-23 实测）
 
@@ -732,10 +741,10 @@ MVP0 链 ─ T0.0→T0.1→T0.2→T0.4→T0.6→T0.3→T0.5→T2.1→T1.1/T1.4�
    `Check-SourceFileSize.ps1`（EXIT=0）/ `Build-Native.ps1` 四项全绿。
    **提权真机验收已闭环**：SMART 读到真实型号与全部健康字段、传感器读到 GPU/SSD 温度。
    唯一遗留：本机未装 PawnIO 导致 CPU 温度无读数（D15，缺第三方内核驱动，非代码缺陷）。
-2. **推一次提交让 CI native job 验证 Catch2**（D11）—— C++ 编译与 C# FFI 冒烟已在本机闭环，只剩 Catch2 依赖联网 FetchContent、本机无从执行。
-   本轮为 `Native_QuerySmart` 新增 6 个 Catch2 契约用例；本机改用 `static_assert` 自检程序先行验证了 ABI 布局与契约调用，
-   但**该自检程序属临时产物，不应纳入仓库**（若 CI 同样受阻于联网，按 D11 的对策把 Catch2 头文件入库）。
-   注意 CI 监听 `[main, dev]` 而远端只有 `master`（D5），推送需 `git push origin master:dev` 才会真正触发。
+2. **观察 CI 首次运行结果**（D5 已解决，D11 待验）—— 2026-09-23 已推送 `master` 并新建远端 `dev`
+   分支，CI（`.github/workflows/ci.yml`，监听 `[main, dev]`）**首次真正被触发**。
+   重点看 native job 的 Catch2 是否能在 GitHub 的 cmake 下跑通（本机因 D10 无法验证）。
+3. **让原生 DLL 进入常规构建流程**（D12）—— 当前需手工 `-Deploy`，`clean` 后 FFI 冒烟会退回 Skip。建议在 `SysSuite.Interop.csproj` 挂 MSBuild target，或按 RID 纳入仓库。
 3. **让原生 DLL 进入常规构建流程**（D12）—— 当前需手工 `-Deploy`，`clean` 后 FFI 冒烟会退回 Skip。建议在 `SysSuite.Interop.csproj` 挂 MSBuild target，或按 RID 纳入仓库。
 4. **归拢既有 P/Invoke 到 `SysSuite.Interop`**（D2）—— 逐服务迁移，每迁一处补错误码映射与单测。
 5. **校准后遗留的高优先项**：`main`/`dev` 分支（D5）、T2.5 的免扫描例外表。

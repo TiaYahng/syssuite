@@ -29,4 +29,40 @@
     <ProjectReference Include="..\..\src\SysSuite.Core\SysSuite.Core.csproj" />
   </ItemGroup>
 
+  <!--
+    原生模块投放（D12）。
+
+    SysSuite.Interop 构建后会跑 rules/Build-Native.ps1 产出 SysSuite.Native.dll，
+    但那只覆盖 Interop 自己的输出目录。FFI 冒烟测试实际跑在本项目的输出目录里，
+    所以必须自己把 DLL 拿过来。
+
+    为什么不反过来让 Interop"向下游投放"：那要求 Interop 预先知道所有消费者的 OutDir，
+    而 MSBuild 的求值顺序（ProjectReference 求值早于 consumer 的 OutDir 定稿）会让它很脆弱。
+    消费方在自己 Build 之后主动拉取更稳 —— 此时 DLL 一定已经产出。
+
+    缺 DLL 的后果不是报错而是**静默 Skip**（FFI 冒烟全部跳过 = 零覆盖且看不出来），
+    所以这里在找不到时主动发 Warning，让问题可见。
+  -->
+  <Target Name="CopyNativeModuleForFfiTests"
+          Condition="'$(OS)' == 'Windows_NT' AND '$(DesignTimeBuild)' != 'true'"
+          AfterTargets="Build">
+    <PropertyGroup>
+      <_NativeConfig Condition="'$(Configuration)' == 'Debug'">Debug</_NativeConfig>
+      <_NativeConfig Condition="'$(Configuration)' != 'Debug'">Release</_NativeConfig>
+      <_NativeDll>$([System.IO.Path]::GetFullPath('$(MSBuildThisFileDirectory)..\..\artifacts\native\$(_NativeConfig)\SysSuite.Native.dll'))</_NativeDll>
+    </PropertyGroup>
+
+    <Warning Condition="!Exists('$(_NativeDll)')"
+             Text="[tests] 未找到 SysSuite.Native.dll（$(_NativeDll)），FFI 冒烟测试将静默跳过 = 零覆盖。请检查 MSVC 工具链是否可用。" />
+
+    <Copy Condition="Exists('$(_NativeDll)')"
+          SourceFiles="$(_NativeDll)"
+          DestinationFolder="$(OutDir)"
+          SkipUnchangedFiles="true" />
+    <Copy Condition="Exists('$(_NativeDll)')"
+          SourceFiles="$(_NativeDll)"
+          DestinationFolder="$(OutDir)runtimes\win-x64\native"
+          SkipUnchangedFiles="true" />
+  </Target>
+
 </Project>
