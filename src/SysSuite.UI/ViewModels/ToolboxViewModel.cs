@@ -1,20 +1,15 @@
-﻿using System.ComponentModel;
-using System.Windows.Input;
+﻿namespace SysSuite.UI.ViewModels;
 
-namespace SysSuite.UI.ViewModels;
-
-public sealed class ToolboxViewModel : INotifyPropertyChanged
+/// <summary>
+/// 工具箱页面 ViewModel。M7 尚未开工，先收敛到 <see cref="PageViewModelBase"/> 契约。
+/// </summary>
+public sealed class ToolboxViewModel : PageViewModelBase
 {
-    private bool isBusy;
-    private string status = "就绪";
+    public IReadOnlyList<string> ToolNames { get; private set; } = [];
 
-    public event PropertyChangedEventHandler? PropertyChanged;
-
-    public bool IsBusy { get => isBusy; private set { isBusy = value; PropertyChanged?.Invoke(this, new(nameof(IsBusy))); } }
-
-    public string Status { get => status; private set { status = value; PropertyChanged?.Invoke(this, new(nameof(Status))); } }
-
-    public ICommand RefreshCommand { get; } = new RelayCommand(_ => { }, _ => true);
-
-    public ICommand CancelCommand { get; } = new RelayCommand(_ => { }, _ => false);
+    protected override Task RefreshAsync()
+    {
+        SetStatus("工具箱将在 M7 里程碑提供常用系统小工具。");
+        return Task.CompletedTask;
+    }
 }

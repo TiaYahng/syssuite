@@ -1,77 +1,42 @@
-using System.IO;
 using System.Windows;
 using System.Windows.Controls;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Win32;
 using SysSuite.Core.Abstractions;
+using SysSuite.UI.ViewModels;
 
 namespace SysSuite.UI.Pages;
 
-public partial class SettingsPage : UserControl
+/// <summary>
+/// 设置页面（D1 后）。读写逻辑在 <see cref="SettingsViewModel"/>，这里只做控件回填与事件转发。
+/// </summary>
+public partial class SettingsPage : UserControl, IDisposable
 {
-    private readonly ISettingsService settingsService;
-    private bool initialized;
+    private readonly SettingsViewModel viewModel;
 
     public SettingsPage()
     {
         InitializeComponent();
-        settingsService = ((App)Application.Current).Services.GetRequiredService<ISettingsService>();
-        WatchdogAutoStartCheckBox.IsChecked = settingsService.Current.WatchdogAutoStart;
-        ExperimentalFeaturesCheckBox.IsChecked = settingsService.Current.EnableExperimentalFeatures;
-        ForceDeleteCheckBox.IsChecked = settingsService.Current.EnableForceDelete;
-        initialized = true;
+        viewModel = new SettingsViewModel(
+            ((App)Application.Current).Services.GetRequiredService<ISettingsService>());
+        WatchdogAutoStartCheckBox.IsChecked = viewModel.WatchdogAutoStart;
+        ExperimentalFeaturesCheckBox.IsChecked = viewModel.EnableExperimentalFeatures;
+        ForceDeleteCheckBox.IsChecked = viewModel.EnableForceDelete;
+        viewModel.MarkInitialized();
+        Unloaded += (_, _) => Dispose();
+    }
+
+    public void Dispose()
+    {
+        viewModel.Dispose();
+        GC.SuppressFinalize(this);
     }
 
     private void OnWatchdogAutoStartChanged(object sender, RoutedEventArgs args)
-    {
-        if (!initialized)
-        {
-            return;
-        }
-
-        var enabled = WatchdogAutoStartCheckBox.IsChecked == true;
-        settingsService.Current.WatchdogAutoStart = enabled;
-        settingsService.SaveDebounced();
-
-        using var runKey = Registry.CurrentUser.OpenSubKey(@"Software\Microsoft\Windows\CurrentVersion\Run", true);
-        if (runKey is null)
-        {
-            return;
-        }
-
-        if (enabled)
-        {
-            var watchdogPath = Path.Combine(AppContext.BaseDirectory, "SysSuite.Watchdog.exe");
-            if (File.Exists(watchdogPath))
-            {
-                runKey.SetValue("SysSuite.Watchdog", watchdogPath);
-            }
-        }
-        else
-        {
-            runKey.DeleteValue("SysSuite.Watchdog", false);
-        }
-    }
+        => viewModel.SetWatchdogAutoStart(WatchdogAutoStartCheckBox.IsChecked == true);
 
     private void OnExperimentalChanged(object sender, RoutedEventArgs args)
-    {
-        if (!initialized)
-        {
-            return;
-        }
-
-        settingsService.Current.EnableExperimentalFeatures = ExperimentalFeaturesCheckBox.IsChecked == true;
-        settingsService.SaveDebounced();
-    }
+        => viewModel.SetExperimentalFeatures(ExperimentalFeaturesCheckBox.IsChecked == true);
 
     private void OnForceDeleteChanged(object sender, RoutedEventArgs args)
-    {
-        if (!initialized)
-        {
-            return;
-        }
-
-        settingsService.Current.EnableForceDelete = ForceDeleteCheckBox.IsChecked == true;
-        settingsService.SaveDebounced();
-    }
+        => viewModel.SetForceDelete(ForceDeleteCheckBox.IsChecked == true);
 }

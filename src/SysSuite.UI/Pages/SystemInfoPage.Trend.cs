@@ -77,12 +77,12 @@ public partial class SystemInfoPage
             TrendCanvas.Children.Add(label);
         }
 
-        var samples = monitorService.GetHistory();
+        var samples = viewModel.GetHistory();
         if (samples.Count < 2)
         {
             var hint = new TextBlock
             {
-                Text = monitorService.IsPaused ? "已暂停" : "正在采集数据...",
+                Text = viewModel.IsMonitoringPaused ? "已暂停" : "正在采集数据...",
                 FontSize = 10,
                 Foreground = labelBrush,
             };

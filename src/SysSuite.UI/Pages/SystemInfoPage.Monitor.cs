@@ -2,54 +2,45 @@ using System.Globalization;
 using System.Windows;
 using System.Windows.Media;
 using SysSuite.Core.Abstractions.System;
+using SysSuite.UI.ViewModels;
 
 namespace SysSuite.UI.Pages;
 
 /// <summary>
-/// 实时监控（T1.4）与传感器（T1.2）、硬盘健康（T1.3）的交互逻辑。
-/// 从主页面文件拆出，满足单文件 ≤ 300 行的门禁。
+/// 实时监控（T1.4）控件状态与传感器（T1.2）/硬盘健康（T1.3）触发的展示逻辑。
+///
+/// 判定与文本组装已迁到 <see cref="SystemInfoViewModel"/>；这里只做"把结果画上去"
+/// 与调用 ViewModel 的动作。
 /// </summary>
 public partial class SystemInfoPage
 {
-    /// <summary>传感器刷新节流：每 N 个监控采样（2 秒一个）读一次硬件温度。</summary>
-    private const int SensorRefreshTicks = 5;
-
-    private int sensorTickCount;
-
     private void OnPauseResumeClick(object sender, RoutedEventArgs args)
     {
-        if (monitorService.IsPaused)
-        {
-            monitorService.ResumeMonitoring();
-        }
-        else
-        {
-            monitorService.Pause();
-        }
-
+        viewModel.ToggleMonitoring();
         UpdatePauseResumeButton();
     }
 
-    private void OnWindowOneMinuteClick(object sender, RoutedEventArgs args) => ApplyWindow(MonitorWindow.OneMinute);
-
-    private void OnWindowFiveMinutesClick(object sender, RoutedEventArgs args) => ApplyWindow(MonitorWindow.FiveMinutes);
-
-    private void ApplyWindow(MonitorWindow window)
+    private void OnWindowOneMinuteClick(object sender, RoutedEventArgs args)
     {
-        monitorService.SetWindow(window);
+        viewModel.ApplyWindow(MonitorWindow.OneMinute);
+        UpdateWindowButtons();
+        RedrawTrend();
+    }
+
+    private void OnWindowFiveMinutesClick(object sender, RoutedEventArgs args)
+    {
+        viewModel.ApplyWindow(MonitorWindow.FiveMinutes);
         UpdateWindowButtons();
         RedrawTrend();
     }
 
     private void UpdatePauseResumeButton()
-    {
-        PauseResumeButton.Content = monitorService.IsPaused ? "继续" : "暂停";
-    }
+        => PauseResumeButton.Content = viewModel.IsMonitoringPaused ? "继续" : "暂停";
 
     /// <summary>选中的时间窗按钮用强调色实底，另一个用描边，形成互斥选择态。</summary>
     private void UpdateWindowButtons()
     {
-        var oneMinute = monitorService.Window == MonitorWindow.OneMinute;
+        var oneMinute = viewModel.CurrentWindow == MonitorWindow.OneMinute;
         ApplyToggleState(WindowOneMinuteButton, oneMinute);
         ApplyToggleState(WindowFiveMinuteButton, !oneMinute);
     }
@@ -62,56 +53,12 @@ public partial class SystemInfoPage
         button.BorderThickness = new Thickness(1);
     }
 
-    /// <summary>
-    /// 传感器查询比 WMI 采样昂贵得多（LibreHardwareMonitor 要跑 SMBus/驱动 IO），
-    /// 因此每 5 个采样周期（约 10 秒）刷新一次，而不是每次采样都读。
-    /// </summary>
-    private async Task RefreshSensorsAsync()
+    private void OnSensorsUpdated(object? sender, SensorSnapshotEventArgs args)
     {
-        var result = await sensorService.GetSensorsAsync();
-        var snapshot = result.IsSuccess ? result.Value : null;
-
-        if (snapshot is not { IsAvailable: true })
-        {
-            // 读不到传感器是正常情形（虚拟机 / 无传感器主板），用占位符而非报错
-            SensorStatusText.Text = "不可用";
-            CpuTemperatureText.Text = "--";
-            GpuTemperatureText.Text = "--";
-            ShowSensorHint(null);
-            return;
-        }
-
-        SensorStatusText.Text = string.Create(CultureInfo.InvariantCulture, $"{snapshot.Readings.Count} 个读数");
-
-        // CPU 与 GPU 必须各取各的硬件分类温度。
-        // 早前两者都调 MaxOf(Temperature)，结果是 GPU Hot Spot（89.8℃）被当成 CPU 温度显示 ——
-        // 那个数字其实来自显卡，与 CPU 毫无关系。
-        CpuTemperatureText.Text = FormatTemperature(snapshot.MaxTemperatureOf(SensorHardwareClass.Cpu));
-        GpuTemperatureText.Text = FormatTemperature(snapshot.MaxTemperatureOf(SensorHardwareClass.Gpu));
-
-        // CPU 温度缺失时必须说明原因 —— 否则用户只会看到一个莫名的 "--"，误以为程序坏了。
-        // 两种原因要分开提示：缺驱动 vs 已装驱动但没提权，处置动作完全不同。
-        ShowSensorHint(DescribeCpuTemperatureGap(snapshot));
-    }
-
-    /// <summary>
-    /// 依据快照给出 CPU 温度缺失的可操作提示；一切正常时返回 null（隐藏提示行）。
-    /// </summary>
-    private static string? DescribeCpuTemperatureGap(SensorSnapshot snapshot)
-    {
-        if (snapshot.CpuTemperatureNeedsKernelDriver)
-        {
-            return "CPU 温度需要内核驱动 PawnIO（LibreHardwareMonitor 0.9.6 起用它替代被 Defender 下架的 WinRing0）。"
-                + "请从 pawnio.eu 安装后重启本程序；GPU 与硬盘温度不受影响。";
-        }
-
-        if (snapshot.CpuTemperatureNeedsElevation)
-        {
-            return "已检测到 PawnIO，但读取 CPU 温度需要管理员权限。请以管理员身份重启本程序；"
-                + "GPU 与硬盘温度不受影响。";
-        }
-
-        return null;
+        SensorStatusText.Text = args.StatusText;
+        CpuTemperatureText.Text = args.CpuTemperature;
+        GpuTemperatureText.Text = args.GpuTemperature;
+        ShowSensorHint(args.Hint);
     }
 
     /// <summary>显示/隐藏传感器说明行；传 null 表示隐藏。</summary>
@@ -128,9 +75,6 @@ public partial class SystemInfoPage
         SensorHintText.Visibility = Visibility.Visible;
     }
 
-    private static string FormatTemperature(double celsius)
-        => celsius <= 0 ? "--" : string.Create(CultureInfo.InvariantCulture, $"{celsius:F1} ℃");
-
     private async void OnQueryDriveHealthClick(object sender, RoutedEventArgs args)
     {
         DriveHealthButton.IsEnabled = false;
@@ -140,14 +84,7 @@ public partial class SystemInfoPage
 
         try
         {
-            var result = await smartService.GetStorageHealthAsync();
-            if (!result.IsSuccess || result.Value is null)
-            {
-                DriveHealthHintText.Text = $"读取失败：{result.Message}";
-                return;
-            }
-
-            ApplyDriveHealth(result.Value);
+            await viewModel.QueryDriveHealthAsync();
         }
         finally
         {
@@ -155,27 +92,29 @@ public partial class SystemInfoPage
         }
     }
 
-    /// <summary>
-    /// 权限不足时以管理员身份重启。
-    ///
-    /// 注意：新进程起来后本进程**必须**尽快退出，否则新实例会撞上
-    /// <c>App</c> 里的单实例 `Mutex` 而直接自我关闭。
-    /// </summary>
     private void OnElevateForDriveHealthClick(object sender, RoutedEventArgs args)
     {
         DriveHealthElevateButton.IsEnabled = false;
-        var result = elevationService.RestartElevated();
-
-        if (result.Requested)
+        if (!viewModel.TryElevateForDriveHealth())
         {
-            DriveHealthHintText.Text = "已请求提权，正在以管理员身份重启...";
-            Application.Current.Shutdown();
+            DriveHealthElevateButton.IsEnabled = true;
+            DriveHealthHintText.Text = viewModel.BusyText;
             return;
         }
 
-        DriveHealthElevateButton.IsEnabled = true;
-        DriveHealthHintText.Text = result.UserDeclined
-            ? "已取消提权。可右键程序图标选择「以管理员身份运行」重试。"
-            : $"提权失败：{result.FailureReason}";
+        DriveHealthHintText.Text = viewModel.BusyText;
+        Application.Current.Shutdown();
     }
+
+    private static string FormatTemperature(double celsius) => SystemInfoViewModel.FormatTemperature(celsius);
+
+    private static string FormatBytesPerSecond(double value) => SystemInfoViewModel.FormatBytesPerSecond(value);
+
+    private static string FormatBytes(long value)
+        => value switch
+        {
+            >= 1024 * 1024 * 1024 => string.Create(CultureInfo.InvariantCulture, $"{value / 1024d / 1024d / 1024d:N1} GB"),
+            >= 1024 * 1024 => string.Create(CultureInfo.InvariantCulture, $"{value / 1024d / 1024d:N1} MB"),
+            _ => string.Create(CultureInfo.InvariantCulture, $"{value:N0} B")
+        };
 }

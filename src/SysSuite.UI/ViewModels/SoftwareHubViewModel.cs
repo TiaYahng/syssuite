@@ -1,20 +1,15 @@
-﻿using System.ComponentModel;
-using System.Windows.Input;
+﻿namespace SysSuite.UI.ViewModels;
 
-namespace SysSuite.UI.ViewModels;
-
-public sealed class SoftwareHubViewModel : INotifyPropertyChanged
+/// <summary>
+/// 软件管家页面 ViewModel。M6 尚未开工，先收敛到 <see cref="PageViewModelBase"/> 契约。
+/// </summary>
+public sealed class SoftwareHubViewModel : PageViewModelBase
 {
-    private bool isBusy;
-    private string status = "就绪";
+    public string Summary { get; private set; } = "尚未检测";
 
-    public event PropertyChangedEventHandler? PropertyChanged;
-
-    public bool IsBusy { get => isBusy; private set { isBusy = value; PropertyChanged?.Invoke(this, new(nameof(IsBusy))); } }
-
-    public string Status { get => status; private set { status = value; PropertyChanged?.Invoke(this, new(nameof(Status))); } }
-
-    public ICommand RefreshCommand { get; } = new RelayCommand(_ => { }, _ => true);
-
-    public ICommand CancelCommand { get; } = new RelayCommand(_ => { }, _ => false);
+    protected override Task RefreshAsync()
+    {
+        SetStatus("软件管家将在 M6 里程碑提供软件检测与批量安装。");
+        return Task.CompletedTask;
+    }
 }

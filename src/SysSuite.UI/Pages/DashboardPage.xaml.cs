@@ -1,15 +1,21 @@
+using System.ComponentModel;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media.Animation;
 using Microsoft.Extensions.DependencyInjection;
-using SysSuite.Core.Abstractions;
 using SysSuite.Core.Abstractions.System;
-using SysSuite.Interop;
+using SysSuite.UI.ViewModels;
 
 namespace SysSuite.UI.Pages;
 
-public partial class DashboardPage : UserControl
+/// <summary>
+/// 仪表盘页面（D1 后）。
+///
+/// ViewModel 负责取数与文本化；这里负责把采样画成弧线（依赖控件几何，属展示逻辑）
+/// 以及平滑滚轮这类纯视觉行为。
+/// </summary>
+public partial class DashboardPage : UserControl, IDisposable
 {
     private static readonly DependencyProperty ContentVerticalOffsetProperty = DependencyProperty.RegisterAttached(
         "ContentVerticalOffset",
@@ -17,28 +23,53 @@ public partial class DashboardPage : UserControl
         typeof(DashboardPage),
         new PropertyMetadata(0d, OnContentVerticalOffsetChanged));
 
-    private readonly IHardwareInfoService hardwareInfoService;
-    private readonly IMonitorService monitorService;
+    private readonly DashboardViewModel viewModel;
 
     public DashboardPage()
     {
         InitializeComponent();
-        hardwareInfoService = ((App)Application.Current).Services.GetRequiredService<IHardwareInfoService>();
-        monitorService = ((App)Application.Current).Services.GetRequiredService<IMonitorService>();
-        monitorService.SampleReady += OnSampleReady;
+        var services = ((App)Application.Current).Services;
+        viewModel = new DashboardViewModel(
+            services.GetRequiredService<IHardwareInfoService>(),
+            services.GetRequiredService<IMonitorService>());
+        viewModel.PropertyChanged += OnViewModelPropertyChanged;
+        viewModel.SampleReady += OnSampleReady;
         Loaded += OnLoaded;
         Unloaded += OnUnloaded;
     }
 
-    private async void OnLoaded(object sender, RoutedEventArgs args)
+    private async void OnLoaded(object sender, RoutedEventArgs args) => await viewModel.ActivateAsync();
+
+    private void OnUnloaded(object sender, RoutedEventArgs args) => Dispose();
+
+    public void Dispose()
     {
-        monitorService.Start();
-        await RefreshAsync();
+        viewModel.PropertyChanged -= OnViewModelPropertyChanged;
+        viewModel.SampleReady -= OnSampleReady;
+        viewModel.Dispose();
+        GC.SuppressFinalize(this);
     }
 
-    private void OnUnloaded(object sender, RoutedEventArgs args)
+    private void OnViewModelPropertyChanged(object? sender, PropertyChangedEventArgs args)
     {
-        monitorService.SampleReady -= OnSampleReady;
+        switch (args.PropertyName)
+        {
+            case nameof(DashboardViewModel.CpuSummary):
+                CpuSummaryText.Text = viewModel.CpuSummary;
+                break;
+            case nameof(DashboardViewModel.MemorySummary):
+                MemorySummaryText.Text = viewModel.MemorySummary;
+                break;
+            case nameof(DashboardViewModel.DiskSummary):
+                DiskSummaryText.Text = viewModel.DiskSummary;
+                break;
+            case nameof(DashboardViewModel.GpuSummary):
+                GpuSummaryText.Text = viewModel.GpuSummary;
+                break;
+            case nameof(DashboardViewModel.BusyText):
+                StatusText.Text = viewModel.BusyText;
+                break;
+        }
     }
 
     private void OnContentScrollPreviewMouseWheel(object sender, MouseWheelEventArgs args)
@@ -66,39 +97,7 @@ public partial class DashboardPage : UserControl
         }
     }
 
-    private async Task RefreshAsync()
-    {
-        StatusText.Text = "正在获取系统状态...";
-        var result = await hardwareInfoService.GetHardwareInfoAsync();
-        if (!result.IsSuccess || result.Value is null)
-        {
-            StatusText.Text = result.Message;
-            return;
-        }
-
-        var info = result.Value;
-        StatusText.Text = $"计算机：{info.ComputerName}";
-        CpuSummaryText.Text = $"CPU：{info.CpuName}";
-        MemorySummaryText.Text = $"内存：{FormatBytes((long)info.TotalPhysicalMemory)}";
-        DiskSummaryText.Text = $"磁盘：{FormatBytes(info.Drives.Sum(drive => drive.TotalBytes))} / 剩余 {FormatBytes(info.Drives.Sum(drive => drive.FreeBytes))}";
-        GpuSummaryText.Text = $"显卡：{(info.GraphicsCards.Count > 0 ? info.GraphicsCards[0].Name : "未知")}";
-    }
-
-    // T0.2 临时自检入口：验证 C# → C++ 调用链是否可用（见 docs/native-abi.md）
-    private void OnNativeCheckClick(object sender, RoutedEventArgs args)
-    {
-        var abiStatus = NativeInterop.GetAbiVersion(out var abiVersion);
-        if (abiStatus != NativeStatus.Ok)
-        {
-            StatusText.Text = $"原生模块：{NativeInterop.Describe(abiStatus)}";
-            return;
-        }
-
-        var versionStatus = NativeInterop.GetVersion(out var version);
-        StatusText.Text = versionStatus == NativeStatus.Ok
-            ? $"原生模块就绪：v{version}（ABI {abiVersion}）"
-            : $"原生模块：{NativeInterop.Describe(versionStatus)}";
-    }
+    private void OnNativeCheckClick(object sender, RoutedEventArgs args) => viewModel.RunNativeSelfCheck();
 
     private void OnSampleReady(object? sender, MonitorSample sample)
     {
@@ -108,11 +107,17 @@ public partial class DashboardPage : UserControl
             MemoryPercentText.Text = $"{sample.MemoryUsedPercent:F1}%";
             SetArc(CpuArc, sample.CpuUsagePercent);
             SetArc(MemoryArc, sample.MemoryUsedPercent);
-            SetRate(DiskPercentText, DiskArc, Math.Max(sample.DiskReadBytesPerSecond, sample.DiskWriteBytesPerSecond));
-            SetRate(NetworkPercentText, NetworkArc, Math.Max(sample.NetworkReceivedBytesPerSecond, sample.NetworkSentBytesPerSecond));
-            DiskReadText.Text = FormatBytesPerSecond(sample.DiskReadBytesPerSecond);
-            DiskWriteText.Text = FormatBytesPerSecond(sample.DiskWriteBytesPerSecond);
-            NetworkText.Text = $"{FormatBytesPerSecond(sample.NetworkReceivedBytesPerSecond)} / {FormatBytesPerSecond(sample.NetworkSentBytesPerSecond)}";
+
+            DiskPercentText.Text = $"{DashboardViewModel.RatePercent(Math.Max(sample.DiskReadBytesPerSecond, sample.DiskWriteBytesPerSecond)):F1}%";
+            SetArc(DiskArc, DashboardViewModel.RatePercent(Math.Max(sample.DiskReadBytesPerSecond, sample.DiskWriteBytesPerSecond)));
+
+            var networkPeak = Math.Max(sample.NetworkReceivedBytesPerSecond, sample.NetworkSentBytesPerSecond);
+            NetworkPercentText.Text = $"{DashboardViewModel.RatePercent(networkPeak):F1}%";
+            SetArc(NetworkArc, DashboardViewModel.RatePercent(networkPeak));
+
+            DiskReadText.Text = DashboardViewModel.FormatBytesPerSecond(sample.DiskReadBytesPerSecond);
+            DiskWriteText.Text = DashboardViewModel.FormatBytesPerSecond(sample.DiskWriteBytesPerSecond);
+            NetworkText.Text = $"{DashboardViewModel.FormatBytesPerSecond(sample.NetworkReceivedBytesPerSecond)} / {DashboardViewModel.FormatBytesPerSecond(sample.NetworkSentBytesPerSecond)}";
         });
     }
 
@@ -120,33 +125,5 @@ public partial class DashboardPage : UserControl
     {
         var ratio = Math.Clamp(percent / 100d, 0d, 1d);
         arc.StrokeDashArray = new System.Windows.Media.DoubleCollection([ratio * 1.57, 10]);
-    }
-
-    private static void SetRate(TextBlock text, System.Windows.Shapes.Ellipse arc, double bytesPerSecond)
-    {
-        var percent = Math.Clamp(bytesPerSecond / (20d * 1024d * 1024d) * 100d, 0d, 100d);
-        text.Text = $"{percent:F1}%";
-        SetArc(arc, percent);
-    }
-
-    private static string FormatBytesPerSecond(double value)
-    {
-        return value switch
-        {
-            >= 1024 * 1024 * 1024 => $"{value / 1024 / 1024 / 1024:F1} GB/s",
-            >= 1024 * 1024 => $"{value / 1024 / 1024:F1} MB/s",
-            >= 1024 => $"{value / 1024:F1} KB/s",
-            _ => $"{value:F0} B/s"
-        };
-    }
-
-    private static string FormatBytes(long value)
-    {
-        return value switch
-        {
-            >= 1024 * 1024 * 1024 => $"{value / 1024d / 1024d / 1024d:N1} GB",
-            >= 1024 * 1024 => $"{value / 1024d / 1024d:N1} MB",
-            _ => $"{value:N0} B"
-        };
     }
 }

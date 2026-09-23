@@ -1,275 +1,197 @@
-using System.Diagnostics;
-using System.IO;
+using System.ComponentModel;
+using System.Globalization;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Data;
 using System.Windows.Input;
 using Microsoft.Extensions.DependencyInjection;
 using SysSuite.Core.Abstractions;
 using SysSuite.Core.Abstractions.Data;
 using SysSuite.Core.Abstractions.Settings;
-using SysSuite.Core.Data;
-using SysSuite.UI.Controls;
+using SysSuite.UI.ViewModels;
 
 namespace SysSuite.UI.Pages;
 
-public partial class UninstallerPage : UserControl
+/// <summary>
+/// 卸载器页面（D1 后）。
+///
+/// 这里只剩"显示层"职责：把用户手势转成 ViewModel 调用、把 ViewModel 状态画到控件、
+/// 实现 <see cref="IUninstallerInteractions"/> 的弹窗/对话框/剪贴板副作用，以及排序与搜索
+/// 这类纯视图行为（它们操作的是 CollectionView，不属于业务）。没有枚举、没有卸载、没有 IO。
+/// </summary>
+public partial class UninstallerPage : UserControl, IDisposable
 {
-    private readonly IUninstallEnumerationService enumerationService;
-    private readonly IIconCacheService iconCacheService;
-    private readonly IUninstallService uninstallService;
-    private readonly ILeftoverScanner leftoverScanner;
-    private readonly IForceDeleteService forceDeleteService;
-    private readonly IAppChangeMonitor changeMonitor;
-    private readonly ISettingsService settingsService;
-    private bool isBusy;
-    private CancellationTokenSource? iconLoadSource;
+    private readonly UninstallerViewModel viewModel;
 
     public UninstallerPage()
     {
         InitializeComponent();
         var services = ((App)Application.Current).Services;
-        enumerationService = services.GetRequiredService<IUninstallEnumerationService>();
-        iconCacheService = services.GetRequiredService<IIconCacheService>();
-        uninstallService = services.GetRequiredService<IUninstallService>();
-        leftoverScanner = services.GetRequiredService<ILeftoverScanner>();
-        forceDeleteService = services.GetRequiredService<IForceDeleteService>();
-        changeMonitor = services.GetRequiredService<IAppChangeMonitor>();
-        settingsService = services.GetRequiredService<ISettingsService>();
-        changeMonitor.AppListChanged += OnAppListChanged;
+        viewModel = new UninstallerViewModel(
+            services.GetRequiredService<IUninstallEnumerationService>(),
+            services.GetRequiredService<IIconCacheService>(),
+            services.GetRequiredService<IUninstallService>(),
+            services.GetRequiredService<IForceDeleteService>(),
+            services.GetRequiredService<IAppChangeMonitor>(),
+            services.GetRequiredService<ISettingsService>(),
+            new UninstallerInteractions(this));
+        viewModel.IconProgressChanged += OnIconProgressChanged;
+        viewModel.PropertyChanged += OnViewModelPropertyChanged;
         Loaded += OnLoaded;
         Unloaded += OnUnloaded;
     }
 
     private async void OnLoaded(object sender, RoutedEventArgs args)
     {
-        changeMonitor.Start();
-        UpdateMonitorState();
-        await RefreshAsync();
+        await viewModel.ActivateAsync();
+        SyncMonitorState();
+        RefreshStatus();
+        UpdateSummary();
+        UpdateCommandStates();
     }
 
     private void OnUnloaded(object sender, RoutedEventArgs args)
     {
-        changeMonitor.StopMonitoring();
-        UpdateMonitorState();
-        iconLoadSource?.Cancel();
+        viewModel.IconProgressChanged -= OnIconProgressChanged;
+        viewModel.PropertyChanged -= OnViewModelPropertyChanged;
+        viewModel.Dispose();
     }
 
-    private void OnAppListChanged(object? sender, IReadOnlyList<AppRecord> apps)
+    public void Dispose()
     {
-        Dispatcher.InvokeAsync(async () =>
-        {
-            StatusText.Text = $"检测到应用列表变化，共 {apps.Count} 个应用。";
-            await RefreshAsync(true);
-        });
+        viewModel.Dispose();
+        GC.SuppressFinalize(this);
     }
 
-    private async void OnRefreshClick(object sender, RoutedEventArgs args)
+    private void OnViewModelPropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs args)
     {
-        await RefreshAsync();
-    }
-
-    private async void OnUninstallClick(object sender, RoutedEventArgs args)
-    {
-        if (GetSelectedApp() is not { } app)
+        if (args.PropertyName == nameof(UninstallerViewModel.Rows))
         {
-            ShowWarning("请先选择一个应用。");
-            return;
-        }
-
-        var owner = Window.GetWindow(this);
-        if (MessageBox.Show(owner, $"开始卸载“{app.Name}”？", "确认卸载", MessageBoxButton.YesNo, MessageBoxImage.Question) != MessageBoxResult.Yes)
-        {
-            return;
-        }
-
-        await RunOperationAsync(async () =>
-        {
-            StatusText.Text = $"正在卸载 {app.Name}...";
-            var result = await uninstallService.UninstallAsync(app, UninstallMode.Quiet);
-            if (!result.IsSuccess || result.Value is null)
-            {
-                StatusText.Text = string.IsNullOrWhiteSpace(result.Message) ? "卸载失败。" : result.Message;
-                return;
-            }
-
-            StatusText.Text = result.Value.Outcome switch
-            {
-                UninstallOutcome.Succeeded => $"卸载完成。备份：{result.Value.BackupRoot}",
-                UninstallOutcome.RebootRequired => $"卸载完成，需要重启系统。备份：{result.Value.BackupRoot}",
-                UninstallOutcome.TimedOut => result.Value.Message,
-                _ => result.Value.Message
-            };
-
-            if (result.Value.Outcome is UninstallOutcome.Succeeded or UninstallOutcome.RebootRequired)
-            {
-                new LeftoverWindow(result.Value.Leftovers ?? []) { Owner = Window.GetWindow(this) }.ShowDialog();
-            }
-
-            if (result.Value.Outcome is not UninstallOutcome.TimedOut)
-            {
-                await RefreshAsync(true);
-            }
-        });
-    }
-
-    private async void OnForceClick(object sender, RoutedEventArgs args)
-    {
-        if (!settingsService.Current.EnableExperimentalFeatures || !settingsService.Current.EnableForceDelete)
-        {
-            ShowWarning("强制删除默认关闭，需在设置中同时开启实验能力和强制删除。");
-            return;
-        }
-
-        if (GetSelectedApp()?.InstallDir is not { } installDir)
-        {
-            ShowWarning("请选择一个包含安装目录的应用。");
-            return;
-        }
-
-        var requiredText = ForceDeleteService.CreateConfirmation(installDir);
-        if (!ConfirmationInputBox.Show(Window.GetWindow(this), "强制删除", "强制删除会先备份，再移除只读/占用文件；无法删除的文件将安排重启后处理。", requiredText))
-        {
-            return;
-        }
-
-        await RunOperationAsync(async () =>
-        {
-            StatusText.Text = "正在强制删除...";
-            var result = await forceDeleteService.DeleteAsync(installDir, requiredText);
-            if (!result.IsSuccess || result.Value is null)
-            {
-                StatusText.Text = string.IsNullOrWhiteSpace(result.Message) ? "强制删除失败。" : result.Message;
-                return;
-            }
-
-            StatusText.Text = $"强制删除完成：文件 {result.Value.DeletedFiles}，目录 {result.Value.DeletedDirectories}，重启处理 {result.Value.ScheduledForReboot}。";
-            await RefreshAsync(true);
-        });
-    }
-
-    private void OnOpenInstallFolderClick(object sender, RoutedEventArgs args)
-    {
-        if (GetSelectedApp()?.InstallDir is not { } installDir || !Directory.Exists(installDir))
-        {
-            ShowWarning("未找到安装目录。");
-            return;
-        }
-
-        Process.Start(new ProcessStartInfo { FileName = installDir, UseShellExecute = true });
-    }
-
-    private void OnCopyRegistryPathClick(object sender, RoutedEventArgs args)
-    {
-        if (GetSelectedApp()?.KeyPath is not { } keyPath)
-        {
-            ShowWarning("当前应用没有注册表路径。");
-            return;
-        }
-
-        Clipboard.SetText(keyPath);
-        StatusText.Text = "注册表路径已复制。";
-    }
-
-    private void OnCopyDetailsClick(object sender, RoutedEventArgs args)
-    {
-        if (GetSelectedApp() is not { } app)
-        {
-            return;
-        }
-
-        Clipboard.SetText($"{app.Name}\n{app.Publisher ?? "—"}\n{app.Version ?? "—"}\n{app.InstallDir ?? "—"}\n{app.KeyPath ?? "—"}");
-        StatusText.Text = "应用详情已复制。";
-    }
-
-    private async Task RefreshAsync(bool ignoreBusy = false)
-    {
-        if (isBusy && !ignoreBusy)
-        {
-            return;
-        }
-
-        isBusy = true;
-        RefreshButton.IsEnabled = false;
-        StatusText.Text = "正在枚举应用...";
-
-        // 新一轮刷新作废上一轮的图标加载：老的图标任务往往正卡在 COM/磁盘 IO 上，
-        // 不取消就会与新任务抢线程池与磁盘，刷新越频繁越慢。
-        var iconLoad = new CancellationTokenSource();
-        var previous = iconLoadSource;
-        iconLoadSource = iconLoad;
-        previous?.Cancel();
-        previous?.Dispose();
-
-        try
-        {
-            var result = await enumerationService.RefreshAsync();
-            if (!result.IsSuccess || result.Value is null)
-            {
-                var cachedResult = await enumerationService.ListAsync();
-                if (cachedResult is not { IsSuccess: true, Value: { Count: > 0 } cachedApps })
-                {
-                    StatusText.Text = string.IsNullOrWhiteSpace(result.Message) ? "刷新失败。" : result.Message;
-                    return;
-                }
-
-                result = new Result<IReadOnlyList<AppRecord>>(ErrorType.None, result.Message, cachedApps);
-            }
-
-            var apps = result.Value ?? [];
-            var rows = apps.Select(app => new AppRow(app)).ToList();
-            AppsList.ItemsSource = rows;
+            AppsList.ItemsSource = viewModel.Rows;
             ApplyView();
             UpdateSummary();
             UpdateCommandStates();
+        }
 
-            // 先把列表呈现出来，再后台补图标 —— 列表本身不依赖图标，
-            // 等图标全部就绪才结束会让用户盯着空列表。
-            StatusText.Text = $"已加载 {rows.Count} 个应用，正在载入图标...";
-            await LoadIconsAsync(rows, iconLoad.Token);
-        }
-        finally
-        {
-            RefreshButton.IsEnabled = true;
-            UpdateCommandStates();
-            isBusy = false;
-        }
+        RefreshStatus();
     }
 
-    private async Task RunOperationAsync(Func<Task> operation)
+    private void OnIconProgressChanged(object? sender, IconProgressEventArgs args)
+        => OperationProgress.Visibility = args.Current >= args.Total ? Visibility.Collapsed : Visibility.Visible;
+
+    private void RefreshStatus()
     {
-        if (isBusy)
+        if (StatusText.Text != viewModel.BusyText)
         {
-            ShowWarning("另一个操作正在执行。");
+            StatusText.Text = viewModel.BusyText;
+        }
+
+        RefreshButton.IsEnabled = !viewModel.IsBusy;
+        OperationProgress.IsIndeterminate = viewModel.IsBusy && OperationProgress.Visibility == Visibility.Visible;
+    }
+
+    private void SyncMonitorState()
+    {
+        MonitorBadge.Text = viewModel.MonitorBadgeText;
+        MonitorButton.Content = viewModel.MonitorButtonText;
+    }
+
+    private void OnRefreshClick(object sender, RoutedEventArgs args) => viewModel.RefreshCommand.Execute(null);
+
+    private async void OnUninstallClick(object sender, RoutedEventArgs args) => await viewModel.UninstallSelectedAsync();
+
+    private async void OnForceClick(object sender, RoutedEventArgs args) => await viewModel.ForceDeleteSelectedAsync();
+
+    private async void OnOpenInstallFolderClick(object sender, RoutedEventArgs args) => await viewModel.OpenInstallFolderAsync();
+
+    private async void OnCopyRegistryPathClick(object sender, RoutedEventArgs args) => await viewModel.CopyRegistryPathAsync();
+
+    private async void OnCopyDetailsClick(object sender, RoutedEventArgs args) => await viewModel.CopyDetailsAsync();
+
+    private async void OnOpenOnlineSearchClick(object sender, RoutedEventArgs args) => await viewModel.OpenOnlineSearchAsync();
+
+    private async void OnExportHtmlClick(object sender, RoutedEventArgs args) => await viewModel.ExportHtmlReportAsync();
+
+    private void OnMonitorClick(object sender, RoutedEventArgs args)
+    {
+        viewModel.ToggleMonitoring();
+        SyncMonitorState();
+    }
+
+    private void OnAppsListSelectionChanged(object sender, SelectionChangedEventArgs args)
+    {
+        viewModel.SelectApp(AppsList.SelectedItem as UninstallerViewModel.AppRow is { } row ? row.App : null);
+        UpdateCommandStates();
+    }
+
+    private void OnAppsListDoubleClick(object sender, MouseButtonEventArgs args) => _ = viewModel.OpenInstallFolderAsync();
+
+    private void UpdateCommandStates()
+    {
+        // 顶部已移除「卸载」按钮（右键菜单保留），这里只维护「强制删除」的可用性。
+        ForceButton.IsEnabled = viewModel.SelectedApp is not null && !viewModel.IsBusy;
+    }
+
+    // ── 以下为纯视图行为：操作 CollectionView 的过滤与排序，不属于业务逻辑 ──
+
+    private void OnSearchTextChanged(object sender, TextChangedEventArgs args)
+    {
+        ClearSearchButton.Visibility = SearchBox.Text.Length == 0 ? Visibility.Collapsed : Visibility.Visible;
+        ApplyView();
+    }
+
+    private void OnClearSearchClick(object sender, RoutedEventArgs args) => SearchBox.Clear();
+
+    private void OnColumnHeaderClick(object sender, RoutedEventArgs args)
+    {
+        if (sender is not GridViewColumnHeader { Tag: string propertyName } || AppsList.ItemsSource is null)
+        {
             return;
         }
 
-        isBusy = true;
-        OperationProgress.Visibility = Visibility.Visible;
-        ForceButton.IsEnabled = false;
-        RefreshButton.IsEnabled = false;
-        SearchBox.IsEnabled = false;
-        try
-        {
-            await operation();
-        }
-        finally
-        {
-            OperationProgress.Visibility = Visibility.Collapsed;
-            RefreshButton.IsEnabled = true;
-            UpdateCommandStates();
-            SearchBox.IsEnabled = true;
-            isBusy = false;
-        }
+        var view = CollectionViewSource.GetDefaultView(AppsList.ItemsSource);
+        var current = view.SortDescriptions.FirstOrDefault();
+        var direction = current.PropertyName == propertyName && current.Direction == ListSortDirection.Ascending
+            ? ListSortDirection.Descending
+            : ListSortDirection.Ascending;
+        view.SortDescriptions.Clear();
+        view.SortDescriptions.Add(new SortDescription(propertyName, direction));
+        view.Refresh();
+        UpdateSummary();
     }
 
-    private void ShowWarning(string message)
+    private void UpdateSummary()
     {
-        MessageBox.Show(Window.GetWindow(this), message, "卸载器", MessageBoxButton.OK, MessageBoxImage.Warning);
+        var rows = AppsList.Items.OfType<UninstallerViewModel.AppRow>().ToList();
+        var totalSize = rows.Sum(row => row.SizeBytes > 0 ? row.SizeBytes : 0);
+        CountText.Text = rows.Count == 0
+            ? "没有程序"
+            : string.Create(
+                CultureInfo.InvariantCulture,
+                $"{rows.Count} 个程序") + (totalSize > 0 ? $" · 共 {UninstallerViewModel.FormatSize(totalSize)}" : string.Empty);
+        EmptyState.Visibility = rows.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
     }
 
-    private void UpdateMonitorState()
+    private void ApplyView()
     {
-        MonitorBadge.Text = changeMonitor.IsRunning ? "监控：开启" : "监控：关闭";
-        MonitorButton.Content = changeMonitor.IsRunning ? "关闭监控" : "启动监控";
+        if (AppsList.ItemsSource is null)
+        {
+            return;
+        }
+
+        var view = CollectionViewSource.GetDefaultView(AppsList.ItemsSource);
+        view.Filter = item => item is UninstallerViewModel.AppRow row && MatchesSearch(row);
+        if (view.SortDescriptions.Count == 0)
+        {
+            view.SortDescriptions.Add(new SortDescription(nameof(UninstallerViewModel.AppRow.Name), ListSortDirection.Ascending));
+        }
+
+        view.Refresh();
+    }
+
+    private bool MatchesSearch(UninstallerViewModel.AppRow row)
+    {
+        var query = SearchBox.Text.Trim();
+        return query.Length == 0 || row.SearchText.Contains(query, StringComparison.OrdinalIgnoreCase);
     }
 }
