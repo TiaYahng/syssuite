@@ -7,7 +7,13 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <UseWPF>true</UseWPF>
     <ApplicationManifest>app.manifest</ApplicationManifest>
+    <!-- T0.6 品牌资产：resources -> ApplicationIcon 嵌入到 exe 的图标资源（winver / 资源管理器可见） -->
+    <ApplicationIcon>Assets\App.ico</ApplicationIcon>
   </PropertyGroup>
+
+  <ItemGroup>
+    <Resource Include="Assets\App.ico" />
+  </ItemGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\SysSuite.Core\SysSuite.Core.csproj" />

@@ -11,6 +11,9 @@
     <PackageReference Include="Serilog.Sinks.File" />
     <PackageReference Include="System.Management" />
     <PackageReference Include="System.Drawing.Common" />
+    <!-- T1.2 温度/风扇/电压传感器。HidSharp 是其运行时依赖（部分主板经 HID 上报）。 -->
+    <PackageReference Include="LibreHardwareMonitorLib" />
+    <PackageReference Include="HidSharp" />
   </ItemGroup>
 
   <ItemGroup>

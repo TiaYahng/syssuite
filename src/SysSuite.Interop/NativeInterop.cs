@@ -121,6 +121,77 @@ public static class NativeInterop
     /// <summary>状态码描述，供 UI 与日志直接使用。</summary>
     public static string Describe(NativeStatus status) => NativeStatusText.Describe(status);
 
+    /// <summary>
+    /// 查询所有物理盘的 SMART 健康信息（T1.3）。
+    ///
+    /// 语义约定：
+    ///   * 单块盘不支持 SMART（RAID 虚拟盘、部分 USB 桥）不影响整体结果，该盘
+    ///     <see cref="SmartDriveInfo.IsAvailable"/> = false、健康度为 <see cref="SmartHealthStatus.Unknown"/>。
+    ///   * 返回的状态码反映**整体调用**是否成功；权限不足时返回
+    ///     <see cref="NativeStatus.AccessDenied"/> 且列表为空（需提权后重试）。
+    /// </summary>
+    public static unsafe NativeStatus QuerySmart(out IReadOnlyList<SmartDriveInfo> drives)
+    {
+        drives = [];
+        if (!EnsureLoaded(out var status))
+        {
+            return status;
+        }
+
+        const int Capacity = 16;
+        var buffer = new NativeSmartInfo[Capacity];
+        for (var i = 0; i < Capacity; i++)
+        {
+            buffer[i].StructSize = (uint)NativeSmartInfo.SizeOf;
+        }
+
+        int code;
+        var count = 0;
+        fixed (NativeSmartInfo* pointer = buffer)
+        {
+            code = NativeMethods.QuerySmart(pointer, Capacity, out count, null, IntPtr.Zero);
+        }
+
+        var result = NativeStatusText.FromCode(code);
+
+        // 即使返回 CANCELLED 也保留已探测到的部分结果
+        if (count <= 0)
+        {
+            return result;
+        }
+
+        var list = new List<SmartDriveInfo>(count);
+        for (var i = 0; i < count && i < Capacity; i++)
+        {
+            list.Add(Translate(ref buffer[i]));
+        }
+
+        drives = list;
+        return result;
+    }
+
+    private static SmartDriveInfo Translate(ref NativeSmartInfo native)
+    {
+        var available = native.IsAvailable == 1;
+        return new SmartDriveInfo(
+            (int)native.DriveNumber,
+            native.ReadModel(),
+            native.ReadSerial(),
+            native.ReadFirmware(),
+            available,
+            (SmartHealthStatus)native.HealthStatus,
+            (int)native.TemperatureCelsius,
+            // 0 表示该项不可用，用 null 让 UI 区分"读到 0"和"没读出来"
+            native.RemainingLifePercent == 0 ? null : (int)native.RemainingLifePercent,
+            native.ReallocatedSectors == 0 ? null : native.ReallocatedSectors,
+            native.PendingSectors == 0 ? null : native.PendingSectors,
+            native.UncorrectableErrors == 0 ? null : native.UncorrectableErrors,
+            (long)Math.Min(native.PowerOnHours, long.MaxValue),
+            (long)Math.Min(native.PowerCycleCount, long.MaxValue),
+            native.TotalBytesWritten == 0 ? null : (long)Math.Min(native.TotalBytesWritten, long.MaxValue),
+            (int)native.AtaSmartAttributeCount);
+    }
+
     private static bool EnsureLoaded(out NativeStatus status)
     {
         if (!EnsureInitialized())

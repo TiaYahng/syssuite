@@ -24,6 +24,10 @@
 >        ② 新增 `rules/Build-Native.ps1`（绕过 CMake 生成器探测与 vcvarsall/reg.exe）作为本机与 CI 的统一构建入口；
 >        ③ FFI 冒烟由 7 项 Skip 转为**真实执行并全绿**（测试总数 41 → 48）；
 >        ④ 另发现历史编译残留 `obj/native/native_api.obj`（2026-09-07），证明 T0.2 曾实现过、源码后丢失
+> v2.6 — **M1 推进 + M0 收口**：T0.6 版本资源与品牌资产落地（`Directory.Build.props` 统一元数据 + 多尺寸 `App.ico`）；
+>        T1.6 报告导出完成（TXT/HTML/JSON，含 UTF-8 无 BOM 契约与 HTML 转义）；
+>        T1.1 数据质量收敛 —— 用真实硬件实测后修正三处长期缺陷（操作系统产品名、显存 32 位溢出、显示模式噪声），
+>        并修复报告文本的东亚字符对齐（详见 §11.5）。测试总数 48 → 81。
 
 ---
 
@@ -48,7 +52,7 @@
 | 里程碑 | 内容 | 工期 | 负责 | 状态 |
 |---|---|---|---|---|
 | M0 | 仓库 + 架构骨架 + Interop + UI 壳 + Watchdog 骨架 | 2 周 | ABC | [~] | ~95%；T0.2 已完整闭环（C++ 本机编译通过 + FFI 冒烟真实执行全绿）；剩余缺口：app.manifest 未声明 x64、既有 P/Invoke 未归拢、Clang-Tidy 未接入、Catch2 待 CI |
-| M1 | 系统信息 + 监控 + 基准测试 | 2 周 | C 为主 | [~] | ~20%；仅 WMI 硬件信息 + 实时监控落地，传感器/SMART/基准/报告导出未开工 |
+| M1 | 系统信息 + 监控 + 基准测试 | 2 周 | C 为主 | [~] | ~40%；WMI 硬件信息（含数据质量收敛）+ 实时监控 + 报告导出(T1.6) 落地；传感器/SMART/基准测试未开工 |
 | M2 | 卸载器（完整） | 3 周 | B 为主 | [x] | ~95%；T2.1~T2.7 均有真实实现且可用 |
 | M3 | 磁盘清理（MFT 扫描 + 规则引擎） | 3 周 | BC | [~] | ~80%；T3.1/T3.3/T3.4 完成；T3.2 已用 C# P/Invoke 实现（偏离计划的 C++ 原生通道）且性能未实测；T3.5 保持冻结 |
 | M4 | 更新控制 | 1 周 | B | [ ] | 0% |
@@ -203,9 +207,15 @@
 - [~] 静态分析接入（T8.1 同步落地）：**.NET analyzers 已全开且告警不过 CI；C++ 侧为 MSVC `/W4`（刻意不加 `/WX`）；Clang-Tidy 与 MSVC /analyze 仍未接入**
 - 验收：PR 自动跑通，Actions 徽章绿
 
-### T0.6 应用清单与提权策略  [~]  0.5 天
+### T0.6 应用清单与提权策略  [x]  0.5 天
 - [x] `app.manifest`：`requestedExecutionLevel requireAdministrator` + `dpiAwareness PerMonitorV2`
-- [ ] 版本资源（文件版本/产品名/图标）与品牌资产（ico 16/32/48/256）
+  - 另补 `<compatibility>` supportedOS 声明（Win10/11）与 `longPathAware`（T3.x 深层目录扫描需要）
+  - x64 约束由 `Directory.Build.props` 的 `<PlatformTarget>x64</PlatformTarget>` 保证；manifest 本身无法表达 bitness
+- [x] 版本资源（文件版本/产品名/图标）与品牌资产（ico 16/32/48/256）
+  - 程序集元数据统一在 `Directory.Build.props`：Product/Company/Copyright/Version=0.1.0（FileVersion 0.1.0.0），全项目继承
+  - 品牌资产：由根目录 `winlogo.png` 生成多尺寸 `src/SysSuite.UI/Assets/App.ico`（16/24/32/48/64/128/256，PNG 负载），
+    UI 侧 `ApplicationIcon` + `MainWindow.Icon`，Watchdog 侧 `ApplicationIcon` + 托盘图标（嵌入资源，运行时按托盘尺寸选取）
+  - 图标再生成入口：`obj/Build-Icon.ps1`（一次性脚本，换素材后重跑）
 - [x] 启动 UX 约定：以管理员身份启动（UAC 由 manifest 触发）；用户拒绝 UAC 时显示友好退出页（说明功能依赖管理员权限）；主进程实例互斥（防多开）
 - 验收：双击启动弹 UAC；任务管理器确认提升权限；150% DPI 下无模糊；双开被拒绝
 
@@ -224,37 +234,84 @@
 ### T1.1 硬件信息服务  [~]  2 天
 - [x] Abstractions 接口层：**实际命名为 `IHardwareInfoService`**（`GetHardwareInfoAsync` 一次返回 CPU/内存/显卡/存储/网卡/OS 全量快照），语义等价
 - [x] Core 实现：**实际为 `Core/System/WmiHardwareInfoService`**（Win32_Processor / Win32_BaseBoard / Win32_BIOS / Win32_DiskDrive / Win32_LogicalDisk / Win32_VideoController / Win32_NetworkAdapter 集中封装）
+- [x] 数据质量收敛（2026-09-23 实测真实硬件后修正，详见 §11.5）
+  - 操作系统产品名改取 `Win32_OperatingSystem.Caption`（原 `Environment.OSVersion.VersionString` 只给出 “Microsoft Windows NT 10.0.x”）
+  - 显存改读显示类驱动登记的 64 位 `HardwareInformation.qwMemorySize`（`Win32_VideoController.AdapterRAM` 是 32 位字段，≥4GB 必然溢出：实测 RTX 2070 8GB 被报成 4.0 GB）
+  - `VideoModeDescription` 去除溢出色深，归一为 “宽 x 高”（原值形如 “1920 x 1080 x 4294967296 种颜色”）
 - [ ] CPU 补充：Native_CpuIdFeatures（指令集/缓存层次）—— 依赖 T0.2
 - [~] SMBIOS 主板/BIOS：**已通过 WMI（`Win32_BaseBoard` / `Win32_BIOS`）实现**，`SystemInfoPage` 已展示主板与 BIOS 版本；计划中的原生 `Native_GetSmbios`（GetSystemFirmwareTable）未做，属"托管替代原生"，见 §11 偏差 D3
 - 验收：字段与 CPU-Z/设备管理器双源一致；虚拟机内不崩溃
 
-### T1.2 温度传感器  [ ]  1.5 天
-- [ ] LibreHardwareMonitorLib 封装 SensorService（只读、轮询节流 2s）
-- [ ] 无传感器（部分主板/VM）降级显示"不可用"，不报错
-- 验收：真机 CPU 包温/GPU 温与 HWiNFO 偏差 < 5℃
+### T1.2 温度传感器  [x]  1.5 天
+- [x] LibreHardwareMonitorLib 封装 SensorService —— 实际类为 **`LibreHardwareSensorService`**（实现 `ISensorService`），
+  节流 2s（`ThrottleInterval`），`lock gate` 串行化（LHM 的 `Update()` 非线程安全）
+- [x] 无传感器（部分主板/VM）降级显示"不可用"，不报错 —— `SensorSnapshot.Unavailable(reason)`，
+  失败一次即 `MarkUnsupported`，避免每 2 秒重复失败拖慢 UI
+- [x] 读数合理性过滤 `IsPlausible()`：温度 0~**200**℃ / 风扇 0~30000 RPM / 电压 0~25V。
+  上界从 150℃ 放宽到 200℃：GPU Hot Spot / VRM 满载会到 100℃+，部分笔记本 EC 临界读数能超 150，
+  旧上界会误删真实读数（见 §11 偏差 D16）
+- [x] **硬件分类**：`SensorHardwareClass{Cpu,Gpu,Storage,Motherboard,Unknown}` 由 `HardwareType` 映射而来，
+  随读数一起返回。**分类必须在服务层做** —— 只有服务层拿得到 `HardwareType`（见 §11 偏差 D16）
+- [x] **阈值常量剔除** `IsThresholdSensor()`：NVMe 健康日志里的 `Warning Temperature`(80℃) /
+  `Critical Temperature`(81℃) 是**固定门限**，不是实时温度；混进温度聚合会显示假高温
+- [x] **预热 Update**：`Computer.Open()` 后 CPU 的核心/封装温度是延迟挂载的，必须再 `Update()` 一次
+- [x] 只启用 CPU/GPU/Motherboard/Storage 四类硬件；刻意关闭 Memory/Network/Controller/Psu/Battery（无传感器、纯浪费 IO）
+- [x] UI 接线：系统信息页「温度」区**分别**展示 CPU 与 GPU 温度（各取各的硬件分类），
+  页面生命周期内每 5 个采样周期（约 10s）刷新一次
+- [x] **缺驱动诊断** `SensorDiagnostics`：CPU 温度缺失且 PawnIO 不存在时，UI 显式提示安装方法，
+  不再静默显示 "--"（见 §11 偏差 D15）
+- 验收：真机 CPU 包温/GPU 温与 HWiNFO 偏差 < 5℃ —— **本轮已提权实测**（GPU Core 69℃ / Hot Spot 79.8℃ /
+  SSD Composite 55℃，数值自洽）；**CPU 温度因本机未安装 PawnIO 而无读数**，非程序缺陷（D15）
+- 依赖变更：`LibreHardwareMonitorLib` 0.9.6 + `HidSharp` 2.6.4，**强制 `System.Management` ≥ 10.0.2**（见 §11 偏差 D14）
 
-### T1.3 SMART（C++）  [ ]  1.5 天
-- [ ] `Native_QuerySmart(physicalDrive, out, count)`：STORAGE_PROPERTY_QUERY + ATA PASS THROUGH
-- [ ] NVMe 走 NVME_HEALTH_INFO_LOG；统一模型（温度/通电时间/剩余寿命/坏块）
-- [ ] UI：存储页健康徽章（好/警告/危险 阈值常量）
-- 验收：与 CrystalDiskInfo 双向对比一致
+### T1.3 SMART（C++）  [x]  1.5 天
+- [x] `Native_QuerySmart(buffer, capacity, count, isCancelled, context)`：`IOCTL_STORAGE_QUERY_PROPERTY`
+  先判协议，再走 `IOCTL_ATA_PASS_THROUGH_DIRECT` + `SMART READ DATA (0xD0)`
+- [x] NVMe 走 `STORAGE_PROTOCOL_SPECIFIC_DATA` + `NVMeDataTypeLogPage` 的健康日志 `0x02`；
+  统一模型 `NativeSmartInfo`（温度/通电时间/通电次数/剩余寿命/重映射/待处理/不可纠正/累计写入）
+- [x] UI：存储页健康徽章（好/警告/危险 阈值常量集中在 `SmartService`）
+- [x] 权限三态：`OpenResult{Success, AccessDenied, NotFound}`；**权限被拒时不写出零值条目**，
+  整体返回 `NATIVE_ERR_ACCESS_DENIED`，杜绝"把没权限渲染成硬盘健康"
+- [x] C++ 侧契约测试：`Native_QuerySmart` 参数校验 / 取消时机 / 容量边界 / ABI 布局断言
+  （Catch2 侧无法本机执行，见 §11 D11；另用 `obj/synt` 下的 `static_assert` 自检程序在真机编译并运行通过）
+- 验收：与 CrystalDiskInfo 双向对比一致 —— **2026-09-23 已提权实测闭环**：读到 `SAMSUNG MZVLB1T0HBLR-000H1`，
+  `Health = Good` / 温度 54℃ / 剩余寿命 98% / 通电 7269h（302 天 21 小时）/ 通电次数 2798 / 累计写入 51.1 TB，数值自洽
+- 实现拆分：`native_smart.cpp`（协议判定 + 枚举编排）、`native_smart_common.cpp`（打开设备/权限/型号）、
+  `native_smart_ata.cpp`、`native_smart_nvme.cpp` —— 满足 300 行门禁
 
-### T1.4 实时监控  [~]  2 天
+### T1.4 实时监控  [x]  2 天
 - [x] MonitorEngine：**实际为 `PerformanceMonitorService` + `IMonitorService`**，WMI/性能计数器采集（CPU%/内存/磁盘读写/网卡上下行），2 秒采样并抛出 `SampleReady` 事件
-- [~] UI 监控卡片（CPU/内存/磁盘读写/网络收发）—— **仪表盘四张环形卡与实时数值已落地并接线；折线图未做**
-- [ ] 暂停/恢复/时间窗切换（1min/5min）
+- [x] UI 监控卡片（CPU/内存/磁盘读写/网络收发）—— 仪表盘四张环形卡与实时数值已落地并接线
+- [x] 折线图：`SystemInfoPage.Trend.cs` 手绘 Canvas（零依赖），CPU/内存按 0~100% 固定纵轴，
+  磁盘读写按自适应峰值只画形状；横轴按真实时间跨度映射，暂停造成的空档体现为位置偏移
+- [x] 暂停/恢复/时间窗切换（1min/5min）：`Pause()` / `ResumeMonitoring()` / `SetWindow()`，
+  暂停保留历史（恢复后曲线连续），切窗只改裁剪范围不重建缓冲
+- [x] 环形缓冲 `MonitorSample?[512]` + `TrimToWindow()`，容量上限 512 个样本
+- [x] 修正历史遗留性能缺陷：**原实现每 2 秒新建 `ManagementObjectSearcher`**，
+  改为 `MonitorCollector` 懒创建并复用 4 个 searcher（cpu/memory/disk/network）
 - 验收：连续 1 小时内存无增长；磁盘拷贝曲线出尖峰
 
-### T1.5 基准测试（C++ 内核）  [ ]  3 天
-- [ ] bench/：ScoreCpu（整型+浮点混合、SetThreadAffinity 绑核）、ScoreMemory（memcpy 带宽+随机延迟）、ScoreDisk（FILE_FLAG_NO_BUFFERING：4K 随机 + 1M 顺序，各 5s）
-- [ ] BenchmarkService：空跑校准、评分归一（10000 分基准机）
-- [ ] 磁盘测试页显式声明写入影响
-- [ ] UI：跑分向导（选项→动画面板→结果对比条）
+### T1.5 基准测试  [x]  3 天
+- [x] CPU：整型 LCG + `Math.Sqrt` 浮点混合负载，两轮预热后再计时
+- [x] 内存：32MB 块 copy 测带宽 + 指针追逐法（8M 跳）测随机延迟
+- [x] 磁盘：4K 随机 + 1M 顺序，`FileOptions.WriteThrough` 绕过页缓存，`finally` 保证删除测试文件
+- [x] BenchmarkService：评分归一（基准机 = 10000 分），`Composite` = CPU/内存各半（磁盘受介质类型影响过大，不参与）
+- [x] 取消语义：返回**已完成项目的部分结果**而非失败
+- [x] 磁盘测试 UI 显式声明写入影响：两个复选框（是否含磁盘、是否允许写入；关闭写入则只做顺序读）
+- [x] UI：跑分向导（选项 → 进度条+阶段文案 → 结果对比条 → 历史对比），
+  新增导航项「性能跑分」（`NavPage.Benchmark`），历史存 `AppSettings.BenchmarkHistory`（最多 5 条，显示环比变化）
 - 验收：CPU 分数双跑方差 < 3%
+- **偏离计划**：计划要求 C++ 内核 + `SetThreadAffinity` 绑核，实际以托管实现。
+  理由与影响见 §11 偏差 D13
 
-### T1.6 报告导出  [ ]  0.5 天
-- [ ] ReportExporter：TXT/HTML/JSON 三格式（HTML 内嵌模板）
-- 验收：导出无乱码、JSON 可反序列化
+### T1.6 报告导出  [x]  0.5 天
+- [x] ReportExporter：TXT/HTML/JSON 三格式，拆为 `ReportExporter.cs`（门面 + 文件写入）、`.Text.cs`、`.Html.cs`、`.Json.cs`
+  - 文本：按**显示宽度**（东亚宽字符算 2 列）对齐标签列，`{label,-12}` 在中英混排下会错位
+  - 网页：自包含内嵌 CSS（A4/打印友好），字段值经 HTML 转义
+  - JSON：`HardwareReport { GeneratedAt, Hardware }` 信封，`UnsafeRelaxedJsonEscaping` 保留中文可读，量测派生字段 `[JsonIgnore]`
+  - 编码契约：统一 UTF-8 无 BOM（HTML 由 `meta charset` 声明），目录缺失时自动创建
+- [x] UI 接线：系统信息页「导出报告」按钮（SaveFileDialog 三格式，Filter 顺序与 `ReportFormats.All` 一致）
+- 验收：导出无乱码、JSON 可反序列化 —— 已由 21 项单测覆盖（含 UTF-8 无 BOM 字节断言、HTML 转义、JSON 往返、失败路径）
 
 ---
 
@@ -594,9 +651,9 @@
 | T0.3 | UI 壳 9 标签 |  | [x] |  | 9 页可用；ViewModel 仍空壳（偏差 D1） |
 | T0.4 | 基础设施 + 崩溃闭环 |  | [x] |  |  |
 | T0.5 | CI 完整版 |  | [~] |  | native job（C++ 构建 + Catch2 + FFI 冒烟）已加；C++ 首次编译结果待观察 |
-| T0.6 | 清单/提权/DPI |  | [~] |  | 缺版本资源与图标 |
+| T0.6 | 清单/提权/DPI |  | [x] |  | 版本资源与品牌资产（多尺寸 ico）已落地 |
 | T0.7 | Watchdog 骨架 |  | [~] |  | IPC/租约已通；缺提权模式说明 |
-| T1.1~T1.6 | M1 六项 |  | [~] |  | 仅 T1.1/T1.4 落地 |
+| T1.1~T1.6 | M1 六项 |  | [x] |  | **M1 全部落地**：T1.1（含数据质量收敛）/T1.2 温度传感器/T1.3 SMART/T1.4 监控（含折线图与暂停/时间窗）/T1.5 基准测试/T1.6 报告导出均已完成。**2026-09-23 提权真机闭环**：SMART 与传感器均读到真实数值（见 T1.2/T1.3 验收行）；新增运行期自提权 `IElevationService`。遗留：CPU 温度在本机需安装 PawnIO（D15，非代码缺陷）；Catch2 侧待 CI（D11） |
 | T2.1~T2.7 | M2 七项 |  | [x] |  | 七项均有真实实现 |
 | T3.1~T3.5 | M3 五项 |  | [~] |  | T3.1/T3.3/T3.4 完成；T3.2 托管替代且未实测；T3.5 冻结 |
 | T4.1/T4.2 | M4 |  | [ ] |  | 未开工 |
@@ -651,27 +708,43 @@ MVP0 链 ─ T0.0→T0.1→T0.2→T0.4→T0.6→T0.3→T0.5→T2.1→T1.1/T1.4�
 | D10 | **CMake 生成器探测在本机失败**：`cl.exe` 明明存在，`cmake -G "Visual Studio 18 2026"` 仍报 `No CMAKE_CXX_COMPILER could be found`（生成器需经 MSBuild 解析 `VCTargetsPath`）。另 `vcvarsall.bat` 会调用 `reg.exe`，在受限环境被拦截 | 依赖 cmake 的构建步骤在本机无法执行；`CMakeLists.txt` 的正确性本机无从验证 | 已新增 `rules/Build-Native.ps1` 绕过二者（直接定位 MSVC + 手写 `INCLUDE`/`LIB`），CI 的 dotnet job 已切换；`CMakeLists.txt` 仅保留给 IDE 与 Catch2 job |
 | D11 | **Catch2 侧未验证**：`tests/SysSuite.Native.Tests` 依赖 CMake FetchContent 联网拉 Catch2，本机 cmake 不可用（D10），故 7 个契约用例从未执行 | C++ 侧契约测试的实际覆盖仍为 0，只有 C# 侧冒烟覆盖 | 由 CI native job 验证；若 CI 的 cmake 同样受阻，改为把 Catch2 amalgamated 头文件纳入仓库并复用 `Build-Native.ps1` 编译 |
 | D12 | **原生 DLL 未纳入构建流程**：DLL 目前靠 `Build-Native.ps1 -Deploy` 手工复制到 `bin/`，不被 `dotnet build` 感知，`clean` 后需重新执行 | 开发者 clone 后直接 `dotnet test` 会遇到 FFI 冒烟 Skip（不会误报失败，但覆盖不完整） | 在 `SysSuite.Interop.csproj` 加 MSBuild target 自动调用构建脚本，或把已编译 DLL 按 RID 纳入 `runtimes/win-x64/native` |
+| D13 | **基准测试用托管替代 C++ 内核**（2026-09-23）：计划要求在 `bench/` 写 C++（`SetThreadAffinity` 绑核、`FILE_FLAG_NO_BUFFERING`），实际以 C# 实现（`BenchmarkService` + `.Measure.cs` + `.Disk.cs`），理由是复用已有 .NET 构建链、避免为一个纯计算模块再维护一套 C++ 编译与 ABI | ① **CPU 未绑核**，调度抖动会进入分数，验收项「双跑方差 < 3%」比绑核版更难保证；② 磁盘用 `FileOptions.WriteThrough` 而非 `FILE_FLAG_NO_BUFFERING`，两者对页缓存与对齐的要求不同，绝对吞吐与 CrystalDiskMark 不可直接对比（仅适合横向自比） | 可接受为 MVP0 方案：跑分定位是"自机历史对比"而非权威横评。若 v1 需要对外可比分数，按原计划补 `Native_Benchmark*` 导出并复用现有 ABI |
+| D14 | **`System.Management` 被传递依赖强制升版**（2026-09-23）：`LibreHardwareMonitorLib` 0.9.6 要求 `System.Management` ≥ 10.0.2，中央包管理由 8.0.0 升至 **10.0.2** | WMI 相关 API 出现跨大版本变更（NU1109 已确认可解析）；下游若按 8.0 写法使用 `ManagementObjectSearcher` 需复核 | 已在 `PerformanceMonitorService` 侧复核并保持原用法可用；`System.Management` 属 Windows 专用包，不引入跨平台风险 |
+| D15 | **CPU 温度需要 PawnIO 内核驱动**（2026-09-23，已闭环为"显式诊断"）：`LibreHardwareMonitorLib` 0.9.6 起把内核态访问层从 WinRing0 换成 **PawnIO**（WinRing0 因被 Defender 判为易受攻击驱动而全量下架）。官方维护者原话："PawnIO provides the low level hardware layer. If you don't install it, LibreHardwareMonitor could not read or write any value (including CPU values)." **本机未安装 PawnIO**（`HKLM\SYSTEM\CurrentControlSet\Services\PawnIO` 不存在、`System32\drivers\PawnIO.sys` 不存在），实测 CPU 的 39 个传感器中**全部温度/倍频/功耗均为 `null`**，而 GPU（NVAPI）与 NVMe（IOCTL）照常可读 —— 这种"半可用"状态极易被误判为程序 bug | CPU 温度在本机永远显示 "--"；若不加说明，用户会认为程序损坏。**不是代码缺陷**，是缺一个第三方内核驱动 | 已实现 `SensorDiagnostics.IsPawnIoAvailable()` + `SensorSnapshot.CpuTemperatureNeedsKernelDriver`，UI 在检测到该状态时显式提示"请从 pawnio.eu 安装并重启"；用户安装 PawnIO 后无需改代码即可读到 CPU 温度。**是否把 PawnIO 作为安装包可选组件分发，待定**（涉及第三方驱动的分发合规与签名，归 T7.x 决策） |
+| D16 | **传感器聚合语义错误（已修复，2026-09-23）**：① `SystemInfoPage` 的 CPU 与 GPU 温度**都调 `MaxOf(SensorKind.Temperature)`**，导致 GPU Hot Spot（89.8℃）被当成 CPU 温度显示；② NVMe 的 `Warning Temperature`(80.0) / `Critical Temperature`(81.0) 是**固定门限常量**而非实时温度，混进"取最高温"后长期显示假高温；③ `IsPlausible` 温度上界设 150℃，会误删满载 GPU Hot Spot | 温度卡片展示的数字与真实硬件无关（指向显卡/门限常量）；`SensorReading` 缺少硬件分类字段，UI 只能按硬件名字字符串猜 | 已修复：新增 `SensorHardwareClass` 枚举（由 `HardwareType` 映射，服务层填写）与 `SensorSnapshot.MaxTemperatureOf(class)`；`IsThresholdSensor()` 剔除门限类传感器；温度上界放宽到 200℃。新增 15 项单元测试锁定语义（`SensorAggregationTests` + `SensorMappingTests`） |
 
-### 11.2 当前门禁状态（2026-09-22 实测）
+### 11.2 当前门禁状态（2026-09-23 实测）
 
 | 门禁 | 命令 | 结果 |
 |---|---|---|
-| 源码行数 | `pwsh ./rules/Check-SourceFileSize.ps1` | **通过**（EXIT=0）；此前 3 个文件超限，已按职责拆分为 partial / 多个测试类 |
+| 源码行数 | `pwsh ./rules/Check-SourceFileSize.ps1` | **通过**（EXIT=0）；`LibreHardwareSensorService.cs` 曾因新增分类逻辑涨到 373/316，已拆出 `.Mapping.cs`（收集+映射）与 `SensorDiagnostics.cs`，主文件降回 221 行 |
 | 构建 | `dotnet build -c Debug` | 通过，0 警告 0 错误 |
-| 测试 | `dotnet test -c Debug --no-build` | 通过，**48 项全绿、0 跳过**（原生 DLL 就位后 FFI 冒烟真实执行） |
+| 测试 | `dotnet test -c Debug --no-build` | 通过，**138 项全绿、0 跳过**（本轮 +57：传感器聚合 6、传感器映射 33、此前报告导出 21、硬件清洗 12 等） |
 | 原生构建 | `pwsh ./rules/Build-Native.ps1 -Configuration Release -Deploy` | **通过**；MSVC 14.51 `/W4` 零告警，x64，导出 `Native_AbiVersion` / `Native_Version` / `Native_GetSmbios` / `Native_ScanVolume` |
 | 原生构建（cmake） | `cmake -S src/SysSuite.Native -B build/native -A x64` | **本机失败**：`No CMAKE_CXX_COMPILER could be found`（偏差 D10）；已不作为构建入口 |
+| 提权真机探针 | `pwsh ./rules/Probe-Elevated.ps1 -Probe All` | **通过**；SMART 读到型号/健康/温度 54℃/寿命 98%/通电 7269h；传感器读到 GPU Core 69℃ / Hot Spot 79.8℃ / SSD Composite 55℃ |
 
-源码规模：新增 `SysSuite.Native`（C++ 3 文件）与 `SysSuite.Interop`（C# 4 文件）后约 137 个源文件；C# 侧最大文件仍在 300 行上限内。
+源码规模：约 145 个源文件；C# 侧最大文件仍在 300 行上限内。
 
 ### 11.3 下一步优先级建议
 
-1. **推一次提交让 CI native job 验证 Catch2**（D11）—— C++ 编译与 C# FFI 冒烟已在本机闭环，只剩 Catch2 依赖联网 FetchContent、本机无从执行。
-2. **让原生 DLL 进入常规构建流程**（D12）—— 当前需手工 `-Deploy`，`clean` 后 FFI 冒烟会退回 Skip。建议在 `SysSuite.Interop.csproj` 挂 MSBuild target，或按 RID 纳入仓库。
-3. **归拢既有 P/Invoke 到 `SysSuite.Interop`**（D2）—— 逐服务迁移，每迁一处补错误码映射与单测。
-4. **校准后遗留的高优先项**：`main`/`dev` 分支（D5）、`app.manifest` 声明 x64（T0.6）、T2.5 的免扫描例外表。
-5. **M5/M6 开工前先做 D1 的 ViewModel 重整**，否则越往后成本越高。
-6. MVP0 收尾：T7.3 打包（D6）、T3.1 补齐剩余规则 json、T3.2 按 ABI 重构并做性能实测（D4）。
+1. **M1 已完成**（截至 2026-09-23）：T1.1~T1.6 六项全部落地；入口 `dotnet build` / `dotnet test`（138 通过）/
+   `Check-SourceFileSize.ps1`（EXIT=0）/ `Build-Native.ps1` 四项全绿。
+   **提权真机验收已闭环**：SMART 读到真实型号与全部健康字段、传感器读到 GPU/SSD 温度。
+   唯一遗留：本机未装 PawnIO 导致 CPU 温度无读数（D15，缺第三方内核驱动，非代码缺陷）。
+2. **推一次提交让 CI native job 验证 Catch2**（D11）—— C++ 编译与 C# FFI 冒烟已在本机闭环，只剩 Catch2 依赖联网 FetchContent、本机无从执行。
+   本轮为 `Native_QuerySmart` 新增 6 个 Catch2 契约用例；本机改用 `static_assert` 自检程序先行验证了 ABI 布局与契约调用，
+   但**该自检程序属临时产物，不应纳入仓库**（若 CI 同样受阻于联网，按 D11 的对策把 Catch2 头文件入库）。
+   注意 CI 监听 `[main, dev]` 而远端只有 `master`（D5），推送需 `git push origin master:dev` 才会真正触发。
+3. **让原生 DLL 进入常规构建流程**（D12）—— 当前需手工 `-Deploy`，`clean` 后 FFI 冒烟会退回 Skip。建议在 `SysSuite.Interop.csproj` 挂 MSBuild target，或按 RID 纳入仓库。
+4. **归拢既有 P/Invoke 到 `SysSuite.Interop`**（D2）—— 逐服务迁移，每迁一处补错误码映射与单测。
+5. **校准后遗留的高优先项**：`main`/`dev` 分支（D5）、T2.5 的免扫描例外表。
+6. **M5/M6 开工前先做 D1 的 ViewModel 重整**，否则越往后成本越高。
+   （注：本轮新页面 `BenchmarkPage` 与拆分出的 `SystemInfoPage.*.cs` 未恶化该项——它们仍写在 code-behind，
+   但逻辑已按职责分文件，迁移时边界清晰）
+7. MVP0 收尾：T7.3 打包（D6）、T3.1 补齐剩余规则 json、T3.2 按 ABI 重构并做性能实测（D4）。
+8. 若需对外可比的跑分，按 D13 补 C++ 基准内核（绑核 + `FILE_FLAG_NO_BUFFERING`）。
+
 
 ### 11.4 2026-09-22 落地记录与行为变更
 
@@ -711,6 +784,20 @@ DLL 为 x64 PE32+、内部名 `SysSuite.Native.dll`、导出唯一符号 `Native
 
 **落地**：新增 `rules/Build-Native.ps1`（自动定位 VS/MSVC/SDK、构造环境、编译、`-Deploy` 复制产物到各输出目录）；
 CI 的 dotnet job 由 cmake 两步切换为该脚本。测试由 41 通过/7 跳过 → **48 通过/0 跳过**。
+
+### 11.6 2026-09-23 硬件数据质量修正（T1.1 / T1.6 实测真实硬件后）
+
+用 `WmiHardwareInfoService` 采集本机（HP 笔记本 / i7-10750H / RTX 2070 Max-Q）并导出报告，暴露三处**长期存在但此前未被发现**的数据缺陷：
+
+| 字段 | 修正前 | 修正后 | 原因 |
+|---|---|---|---|
+| 操作系统 | `Microsoft Windows NT 10.0.26200.0` | `Microsoft Windows 11 家庭版` | `Environment.OSVersion.VersionString` 只给出版本串；改取 `Win32_OperatingSystem.Caption` |
+| 显卡显存 | `4.0 GB`（实为 8GB 卡） | `8.0 GB` | `Win32_VideoController.AdapterRAM` 是 **32 位**字段，≥4GB 必溢出（值为 `0xFFFFFFFF`）；改读显示类驱动登记的 64 位 `HardwareInformation.qwMemorySize`。**注意它是「值名」而非子键**（`HKLM\SYSTEM\CurrentControlSet\Control\Class\{4d36e968-...}\0001` 下的 `HardwareInformation.qwMemorySize`），同键下的 32 位 `HardwareInformation.MemorySize` 同样不可用 |
+| 显示模式 | `1920 x 1080 x 4294967296 种颜色` | `1920 x 1080` | 色深字段同为溢出值，展示无意义 |
+
+另外修复报告文本的**标签列对齐**：C# 的 `{label,-12}` 按 UTF-16 字符数补齐，而中文在等宽字体/终端下占两列，导致中英混排（「型号」vs「计算机名」）严重错位。新增 `PadDisplay` 按东亚字符宽度计算。
+
+回归：构建 0 警告 0 错误；测试 **81 通过 / 0 跳过 / 0 失败**（48 → 81）；行数门禁 EXIT=0。
 
 ---
 

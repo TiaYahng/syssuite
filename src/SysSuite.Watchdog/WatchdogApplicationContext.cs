@@ -30,7 +30,7 @@ internal sealed class WatchdogApplicationContext : ApplicationContext
 
         icon = new NotifyIcon
         {
-            Icon = System.Drawing.SystemIcons.Shield,
+            Icon = LoadAppIcon(),
             Text = "SysSuite Watchdog",
             Visible = true
         };
@@ -55,6 +55,27 @@ internal sealed class WatchdogApplicationContext : ApplicationContext
                 OpenMainApp();
             }
         });
+    }
+
+    /// <summary>从嵌入资源加载品牌图标；缺失时退回系统盾牌图标，保证托盘不因资源问题消失。</summary>
+    private static Icon LoadAppIcon()
+    {
+        try
+        {
+            using var stream = typeof(WatchdogApplicationContext).Assembly
+                .GetManifestResourceStream("SysSuite.Watchdog.App.ico");
+            if (stream is null)
+            {
+                return SystemIcons.Shield;
+            }
+
+            // 多尺寸 ICO 中按托盘实际尺寸挑选，避免系统二次缩放导致模糊
+            return new Icon(stream, SystemInformation.SmallIconSize);
+        }
+        catch (ArgumentException)
+        {
+            return SystemIcons.Shield;
+        }
     }
 
     private static void OpenMainApp()

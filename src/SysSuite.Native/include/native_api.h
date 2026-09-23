@@ -48,6 +48,35 @@
 // 单次回调回传的最大条目数上限，防止 C# 侧单次分配过大
 #define NATIVE_SCAN_BATCH_MAX 4096
 
+// SMART 查询所需的最小缓冲区（字节）。容纳本次支持的物理盘数量上限。
+#define NATIVE_SMART_CAPACITY_MIN 64
+
+// 单块物理盘的 SMART 结果。
+// 结构体布局是 ABI 的一部分：只允许在尾部追加字段，字段不得重排、不得改类型。
+// 所有字段为 0 表示"该项不可用"，调用方据此区分"读到 0" 与 "没读出来"。
+#pragma pack(push, 8)
+typedef struct NativeSmartInfo
+{
+    uint32_t structSize;        // 必须由调用方填 sizeof(NativeSmartInfo)，用于版本兼容
+    uint32_t isAvailable;       // 1 = 该盘成功读到 SMART；0 = 不支持/读取失败
+    uint32_t driveNumber;       // 物理盘序号，对应 \\.\PhysicalDriveN
+    uint32_t healthStatus;      // 0 未知 / 1 良好 / 2 警告 / 3 危险（由原生侧按原始值判定）
+    uint32_t temperatureCelsius;// 当前温度；0 表示不可用
+    uint32_t remainingLifePercent; // 剩余寿命百分比（NVMe 与部分 SSD）；0 表示不可用
+    uint32_t reallocatedSectors;   // 重映射扇区数（ATA 属性 5）；0 表示不可用
+    uint32_t pendingSectors;       // 待处理扇区数（ATA 属性 197）；0 表示不可用
+    uint32_t uncorrectableErrors;  // 不可纠正错误数（ATA 属性 187）
+    uint64_t powerOnHours;      // 通电时间（小时）
+    uint64_t powerCycleCount;   // 通电次数
+    uint64_t totalBytesWritten;  // 累计写入量（字节，NVMe 专用）；0 表示不可用
+    uint32_t ataSmartAttributeCount; // 有效属性数，供 UI 判断"有无详细数据"
+    uint32_t reserved0;         // 对齐保留，必须为 0
+    wchar_t  model[64];         // 型号，L'\0' 结尾（含终止符最多 64 字符）
+    wchar_t  serial[64];        // 序列号
+    wchar_t  firmware[16];      // 固件版本
+} NativeSmartInfo;
+#pragma pack(pop)
+
 // 批量进度回调：返回 0 继续；返回非 0 视为调用方请求中止（等价于取消）
 typedef int(NATIVE_CALL* NativeScanCallback)(void* context,
                                              const uint64_t* entryIds,
@@ -81,6 +110,23 @@ NATIVE_API int NATIVE_CALL Native_ScanVolume(const wchar_t* volume,
                                              NativeScanCallback onBatch,
                                              void* context,
                                              NativeCancelCheck isCancelled);
+
+// 枚举物理盘的 SMART 健康信息（T1.3）。
+//
+// buffer：调用方提供的 NativeSmartInfo 数组，capacity 为其**元素个数**（非字节数）。
+// count ：回填实际写入的元素个数；失败时置 0。
+//
+// 契约：
+//   * 需要管理员权限（IOCTL 直达设备）。权限不足返回 NATIVE_ERR_ACCESS_DENIED。
+//   * 单块盘不支持 SMART（如 RAID 虚拟盘、部分 USB 桥）不影响其它盘，
+//     该盘 isAvailable = 0，整体仍返回 NATIVE_OK。
+//   * 取消：进入时先检查一次，每块盘之间再检查一次。
+//   * structSize 字段由调用方预填；原生侧只写不超过该大小的内容，向后兼容旧调用方。
+NATIVE_API int NATIVE_CALL Native_QuerySmart(NativeSmartInfo* buffer,
+                                             int capacity,
+                                             int* count,
+                                             NativeCancelCheck isCancelled,
+                                             void* context);
 
 #ifdef __cplusplus
 }  // extern "C"

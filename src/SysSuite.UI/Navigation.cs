@@ -24,6 +24,7 @@ public sealed class NavigationService : INavigationService
         [NavPage.Security] = () => new SecurityPage(),
         [NavPage.Desktop] = () => new DesktopPage(),
         [NavPage.SoftwareHub] = () => new SoftwareHubPage(),
+        [NavPage.Benchmark] = () => new BenchmarkPage(),
         [NavPage.Toolbox] = () => new ToolboxPage(),
         [NavPage.Settings] = () => new SettingsPage()
     };

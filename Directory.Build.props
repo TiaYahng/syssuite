@@ -9,4 +9,18 @@
     <PlatformTarget>x64</PlatformTarget>
     <NuGetAudit>false</NuGetAudit>
   </PropertyGroup>
+
+  <!-- T0.6 版本资源：全仓库统一的程序集元数据（winver 资源/文件属性可见） -->
+  <PropertyGroup>
+    <Product>SysSuite</Product>
+    <Company>SysSuite</Company>
+    <Copyright>Copyright (c) SysSuite</Copyright>
+    <Description>SysSuite - Windows 系统增强套件（卸载器 / 磁盘清理 / 系统信息 / 桌面整理）</Description>
+    <NeutralLanguage>zh-CN</NeutralLanguage>
+    <!-- MVP0 阶段版本：与 PLAN 的版本分层一致 -->
+    <Version>0.1.0</Version>
+    <AssemblyVersion>0.1.0.0</AssemblyVersion>
+    <FileVersion>0.1.0.0</FileVersion>
+    <IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
+  </PropertyGroup>
 </Project>

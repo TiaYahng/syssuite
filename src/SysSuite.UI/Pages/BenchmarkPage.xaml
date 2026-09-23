@@ -1,0 +1,116 @@
+<UserControl x:Class="SysSuite.UI.Pages.BenchmarkPage"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <Grid HorizontalAlignment="Stretch" VerticalAlignment="Stretch" Margin="8,0,8,8">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+
+        <Border Background="{DynamicResource App.Surface}" BorderBrush="{DynamicResource App.Border}" BorderThickness="1" CornerRadius="8" Padding="12,8" Margin="0,0,0,4">
+            <StackPanel>
+                <TextBlock Text="性能跑分" FontSize="18" FontWeight="SemiBold" Foreground="{DynamicResource App.Text}" />
+                <TextBlock x:Name="StatusText" Text="选择跑分模式后开始。跑分期间 CPU 会满载，建议关闭其他大型程序。" Margin="0,2,0,0" FontSize="12" TextWrapping="Wrap" Foreground="{DynamicResource App.SubtleText}" />
+            </StackPanel>
+        </Border>
+
+        <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Hidden" HorizontalAlignment="Stretch" VerticalAlignment="Stretch" PanningMode="VerticalOnly" Focusable="False">
+            <StackPanel>
+                <Border Background="{DynamicResource App.Surface}" BorderBrush="{DynamicResource App.Border}" BorderThickness="1" CornerRadius="8" Padding="10" Margin="0,0,0,4">
+                    <StackPanel>
+                        <TextBlock Text="跑分选项" FontWeight="SemiBold" Foreground="{DynamicResource App.Text}" />
+                        <StackPanel Orientation="Horizontal" Margin="0,6,0,0">
+                            <Button x:Name="QuickButton" Content="快速跑分" Width="86" Height="28" Margin="0,0,6,0" FontSize="12" Padding="0" Background="{DynamicResource App.Accent}" Foreground="{DynamicResource App.AccentText}" Click="OnQuickRunClick" />
+                            <Button x:Name="FullButton" Content="完整跑分" Width="86" Height="28" Margin="0,0,6,0" FontSize="12" Padding="0" Background="{DynamicResource App.Background}" BorderBrush="{DynamicResource App.Border}" BorderThickness="1" Foreground="{DynamicResource App.Text}" Click="OnFullRunClick" />
+                            <Button x:Name="CancelButton" Content="中止" Width="66" Height="28" FontSize="12" Padding="0" IsEnabled="False" Background="{DynamicResource App.Background}" BorderBrush="{DynamicResource App.Border}" BorderThickness="1" Foreground="{DynamicResource App.Text}" Click="OnCancelRunClick" />
+                        </StackPanel>
+
+                        <CheckBox x:Name="IncludeDiskCheck" Content="包含磁盘测试（会在临时目录写入并删除测试文件）" Margin="0,8,0,0" FontSize="12" Foreground="{DynamicResource App.Text}" />
+                        <CheckBox x:Name="DiskWriteCheck" Content="磁盘测试允许写入（关闭则只做顺序读，速度较慢但绝对安全）" Margin="0,4,0,0" FontSize="12" IsChecked="True" Foreground="{DynamicResource App.Text}" />
+
+                        <Grid Margin="0,10,0,0">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <TextBlock x:Name="StageText" Text="尚未开始。" FontSize="12" Foreground="{DynamicResource App.Text}" VerticalAlignment="Center" />
+                            <TextBlock x:Name="ProgressPercentText" Grid.Column="1" Text="" FontSize="12" FontWeight="SemiBold" Foreground="{DynamicResource App.Text}" VerticalAlignment="Center" />
+                        </Grid>
+                        <ProgressBar x:Name="RunProgress" Height="6" Margin="0,4,0,0" Minimum="0" Maximum="100" Value="0" />
+                    </StackPanel>
+                </Border>
+
+                <Border x:Name="ResultPanel" Background="{DynamicResource App.Surface}" BorderBrush="{DynamicResource App.Border}" BorderThickness="1" CornerRadius="8" Padding="10" Margin="0,0,0,4" Visibility="Collapsed">
+                    <StackPanel>
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <StackPanel>
+                                <TextBlock Text="跑分结果" FontWeight="SemiBold" Foreground="{DynamicResource App.Text}" />
+                                <TextBlock x:Name="MachineText" Margin="0,2,0,0" FontSize="11" TextWrapping="Wrap" Foreground="{DynamicResource App.SubtleText}" />
+                            </StackPanel>
+                            <StackPanel Grid.Column="1" HorizontalAlignment="Right">
+                                <TextBlock Text="综合分" FontSize="10" HorizontalAlignment="Right" Foreground="{DynamicResource App.SubtleText}" />
+                                <TextBlock x:Name="CompositeText" Text="--" FontSize="26" FontWeight="SemiBold" HorizontalAlignment="Right" Foreground="{DynamicResource App.Accent}" />
+                            </StackPanel>
+                        </Grid>
+                        <TextBlock Text="以基准机 = 10000 分为参照，分数越高越好。内存分由带宽与延迟共同决定。" Margin="0,4,0,0" FontSize="11" TextWrapping="Wrap" Foreground="{DynamicResource App.SubtleText}" />
+
+                        <ItemsControl x:Name="ScoreList" Margin="0,8,0,0">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <Border Background="{DynamicResource App.Background}" CornerRadius="6" Padding="8,6" Margin="0,0,0,4">
+                                        <StackPanel>
+                                            <Grid>
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="*" />
+                                                    <ColumnDefinition Width="Auto" />
+                                                </Grid.ColumnDefinitions>
+                                                <TextBlock Text="{Binding Name}" FontSize="13" FontWeight="SemiBold" Foreground="{DynamicResource App.Text}" />
+                                                <TextBlock Grid.Column="1" Text="{Binding ScoreText}" FontSize="13" FontWeight="SemiBold" Foreground="{DynamicResource App.Text}" />
+                                            </Grid>
+                                            <Border Height="5" Margin="0,5,0,0" Background="{DynamicResource App.Border}" CornerRadius="2.5">
+                                                <Border HorizontalAlignment="Left" Background="{Binding BarBrush}" CornerRadius="2.5" Width="{Binding BarWidth}" />
+                                            </Border>
+                                            <TextBlock Text="{Binding Detail}" Margin="0,5,0,0" FontSize="11" TextWrapping="Wrap" Foreground="{DynamicResource App.SubtleText}" />
+                                        </StackPanel>
+                                    </Border>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </StackPanel>
+                </Border>
+
+                <Border Background="{DynamicResource App.Surface}" BorderBrush="{DynamicResource App.Border}" BorderThickness="1" CornerRadius="8" Padding="10" Margin="0,0,0,4">
+                    <StackPanel>
+                        <TextBlock Text="历史对比" FontWeight="SemiBold" Foreground="{DynamicResource App.Text}" />
+                        <TextBlock Text="每次跑分结束后自动记录，最多保留 5 次，用于观察清灰/换硅脂/超频后的变化。" Margin="0,2,0,0" FontSize="11" TextWrapping="Wrap" Foreground="{DynamicResource App.SubtleText}" />
+                        <ItemsControl x:Name="HistoryList" Margin="0,6,0,0">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <Border Background="{DynamicResource App.Background}" CornerRadius="6" Padding="8,4" Margin="0,0,0,3">
+                                        <Grid>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="Auto" />
+                                                <ColumnDefinition Width="*" />
+                                                <ColumnDefinition Width="Auto" />
+                                                <ColumnDefinition Width="Auto" />
+                                            </Grid.ColumnDefinitions>
+                                            <TextBlock Text="{Binding RunAtText}" FontSize="11" Width="112" Foreground="{DynamicResource App.SubtleText}" />
+                                            <TextBlock Grid.Column="1" Text="{Binding MachineText}" FontSize="11" TextTrimming="CharacterEllipsis" Foreground="{DynamicResource App.SubtleText}" />
+                                            <TextBlock Grid.Column="2" Text="{Binding DeltaText}" FontSize="11" FontWeight="SemiBold" Margin="8,0" Foreground="{Binding DeltaBrush}" />
+                                            <TextBlock Grid.Column="3" Text="{Binding CompositeText}" FontSize="12" FontWeight="SemiBold" MinWidth="52" TextAlignment="Right" Foreground="{DynamicResource App.Text}" />
+                                        </Grid>
+                                    </Border>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                        <Button x:Name="ClearHistoryButton" Content="清空历史" Width="76" Height="22" HorizontalAlignment="Left" Margin="0,6,0,0" FontSize="11" Padding="0" Background="{DynamicResource App.Background}" BorderBrush="{DynamicResource App.Border}" BorderThickness="1" Foreground="{DynamicResource App.Text}" Click="OnClearHistoryClick" />
+                    </StackPanel>
+                </Border>
+            </StackPanel>
+        </ScrollViewer>
+    </Grid>
+</UserControl>

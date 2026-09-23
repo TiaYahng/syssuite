@@ -19,6 +19,7 @@
                 </StackPanel>
                 <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
                     <Button Content="刷新" Width="56" Height="26" Margin="0,0,6,0" FontSize="12" Padding="0" Background="{DynamicResource App.Accent}" Foreground="{DynamicResource App.AccentText}" Click="OnRefreshClick" />
+                    <Button Content="导出报告" Width="72" Height="26" Margin="0,0,6,0" FontSize="12" Padding="0" Background="{DynamicResource App.Background}" BorderBrush="{DynamicResource App.Border}" BorderThickness="1" Foreground="{DynamicResource App.Text}" Click="OnExportReportClick" />
                     <Button Content="环境变量" Width="72" Height="26" FontSize="12" Padding="0" Background="{DynamicResource App.Background}" BorderBrush="{DynamicResource App.Border}" BorderThickness="1" Foreground="{DynamicResource App.Text}" Click="OnOpenEnvironmentVariablesClick" />
                 </StackPanel>
             </Grid>
@@ -49,7 +50,18 @@
 
                 <Border Grid.Row="0" Grid.Column="1" VerticalAlignment="Top" Background="{DynamicResource App.Surface}" BorderBrush="{DynamicResource App.Border}" BorderThickness="1" CornerRadius="8" Padding="8" Margin="4,0,0,4">
                     <StackPanel>
-                        <TextBlock Text="实时监控" FontWeight="SemiBold" Foreground="{DynamicResource App.Text}" />
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Text="实时监控" FontWeight="SemiBold" VerticalAlignment="Center" Foreground="{DynamicResource App.Text}" />
+                            <StackPanel Grid.Column="1" Orientation="Horizontal">
+                                <Button x:Name="PauseResumeButton" Content="暂停" Width="48" Height="20" Margin="0,0,4,0" FontSize="11" Padding="0" Background="{DynamicResource App.Background}" BorderBrush="{DynamicResource App.Border}" BorderThickness="1" Foreground="{DynamicResource App.Text}" Click="OnPauseResumeClick" />
+                                <Button x:Name="WindowOneMinuteButton" Content="1 分钟" Width="54" Height="20" Margin="0,0,4,0" FontSize="11" Padding="0" Background="{DynamicResource App.Accent}" Foreground="{DynamicResource App.AccentText}" Click="OnWindowOneMinuteClick" />
+                                <Button x:Name="WindowFiveMinuteButton" Content="5 分钟" Width="54" Height="20" FontSize="11" Padding="0" Background="{DynamicResource App.Background}" BorderBrush="{DynamicResource App.Border}" BorderThickness="1" Foreground="{DynamicResource App.Text}" Click="OnWindowFiveMinutesClick" />
+                            </StackPanel>
+                        </Grid>
                         <UniformGrid Columns="3" Margin="0,3,0,0">
                             <Border Background="{DynamicResource App.Background}" CornerRadius="6" Padding="4" Margin="0,0,2,2">
                                 <StackPanel>
@@ -82,12 +94,77 @@
                                 </StackPanel>
                             </Border>
                         </UniformGrid>
+
+                        <Grid Margin="0,4,0,0">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Text="温度" FontSize="10" Foreground="{DynamicResource App.SubtleText}" VerticalAlignment="Center" />
+                            <TextBlock x:Name="SensorStatusText" Grid.Column="1" FontSize="10" Foreground="{DynamicResource App.SubtleText}" VerticalAlignment="Center" />
+                        </Grid>
+                        <UniformGrid Columns="2" Margin="0,2,0,0">
+                            <Border Background="{DynamicResource App.Background}" CornerRadius="6" Padding="4" Margin="0,0,2,0">
+                                <StackPanel>
+                                    <TextBlock Text="CPU 温度" FontSize="10" Foreground="{DynamicResource App.SubtleText}" />
+                                    <TextBlock x:Name="CpuTemperatureText" Margin="0,1,0,0" FontSize="14" FontWeight="SemiBold" Foreground="{DynamicResource App.Text}" />
+                                </StackPanel>
+                            </Border>
+                            <Border Background="{DynamicResource App.Background}" CornerRadius="6" Padding="4" Margin="2,0,0,0">
+                                <StackPanel>
+                                    <TextBlock Text="GPU 温度" FontSize="10" Foreground="{DynamicResource App.SubtleText}" />
+                                    <TextBlock x:Name="GpuTemperatureText" Margin="0,1,0,0" FontSize="14" FontWeight="SemiBold" Foreground="{DynamicResource App.Text}" />
+                                </StackPanel>
+                            </Border>
+                        </UniformGrid>
+                        <TextBlock x:Name="SensorHintText" FontSize="10" TextWrapping="Wrap" Margin="0,2,0,0"
+                                   Foreground="{DynamicResource App.CautionText}" Visibility="Collapsed" />
+
+                        <TextBlock Text="趋势" FontSize="10" Margin="0,4,0,0" Foreground="{DynamicResource App.SubtleText}" />
+                        <Canvas x:Name="TrendCanvas" Height="92" Margin="0,2,0,0" Background="{DynamicResource App.Background}" ClipToBounds="True" SizeChanged="OnTrendCanvasSizeChanged" />
                     </StackPanel>
                 </Border>
 
                 <Border Grid.Row="1" Grid.Column="0" Background="{DynamicResource App.Surface}" BorderBrush="{DynamicResource App.Border}" BorderThickness="1" CornerRadius="8" Padding="10" Margin="0,0,4,4">
                     <StackPanel>
-                        <TextBlock Text="存储设备" FontWeight="SemiBold" Foreground="{DynamicResource App.Text}" />
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Text="存储设备" FontWeight="SemiBold" VerticalAlignment="Center" Foreground="{DynamicResource App.Text}" />
+                            <Button x:Name="DriveHealthButton" Grid.Column="1" Content="读取健康" Width="66" Height="20" FontSize="11" Padding="0" Background="{DynamicResource App.Background}" BorderBrush="{DynamicResource App.Border}" BorderThickness="1" Foreground="{DynamicResource App.Text}" Click="OnQueryDriveHealthClick" />
+                        </Grid>
+                        <TextBlock x:Name="DriveHealthHintText" Margin="0,3,0,0" FontSize="11" TextWrapping="Wrap" Visibility="Collapsed" Foreground="{DynamicResource App.SubtleText}" />
+                        <Button x:Name="DriveHealthElevateButton" Content="以管理员身份重启并读取" HorizontalAlignment="Left" Margin="0,4,0,0" Height="22" FontSize="11" Padding="8,0" Visibility="Collapsed" Background="{DynamicResource App.Accent}" Foreground="{DynamicResource App.AccentText}" Click="OnElevateForDriveHealthClick" />
+
+                        <ItemsControl x:Name="DriveHealthList" Margin="0,3,0,0" Visibility="Collapsed">
+                            <ItemsControl.ItemsPanel>
+                                <ItemsPanelTemplate>
+                                    <WrapPanel Orientation="Horizontal" />
+                                </ItemsPanelTemplate>
+                            </ItemsControl.ItemsPanel>
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <Border Background="{DynamicResource App.Background}" CornerRadius="6" Padding="6,4" Margin="0,0,4,4" MinWidth="150">
+                                        <StackPanel>
+                                            <Grid>
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="*" />
+                                                    <ColumnDefinition Width="Auto" />
+                                                </Grid.ColumnDefinitions>
+                                                <TextBlock Text="{Binding Title}" FontSize="12" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" Foreground="{DynamicResource App.Text}" />
+                                                <Border Grid.Column="1" Background="{Binding BadgeBackground}" CornerRadius="4" Padding="5,1" Margin="6,0,0,0">
+                                                    <TextBlock Text="{Binding LevelText}" FontSize="11" FontWeight="SemiBold" Foreground="{Binding BadgeForeground}" />
+                                                </Border>
+                                            </Grid>
+                                            <TextBlock Text="{Binding DetailText}" Margin="0,3,0,0" FontSize="11" TextWrapping="Wrap" Foreground="{DynamicResource App.SubtleText}" />
+                                        </StackPanel>
+                                    </Border>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+
                         <ListView x:Name="StorageList" Margin="0,4,0,0" Background="Transparent" BorderThickness="0" ScrollViewer.VerticalScrollBarVisibility="Disabled" ScrollViewer.HorizontalScrollBarVisibility="Disabled">
                             <ListView.Resources>
                                 <Style TargetType="ListViewItem">

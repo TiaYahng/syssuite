@@ -29,6 +29,12 @@ public sealed class AppSettings
     public string AccountEmail { get; set; } = string.Empty;
 
     public bool WatchdogAutoStart { get; set; } = true;
+
+    /// <summary>
+    /// 跑分历史（T1.5），每项格式为 "UTC时间|机器摘要|综合分"，最多 5 条。
+    /// 用字符串而非嵌套对象，避免引入新的 JSON 可序列化类型。
+    /// </summary>
+    public List<string> BenchmarkHistory { get; set; } = [];
 }
 
 [JsonSerializable(typeof(AppSettings))]

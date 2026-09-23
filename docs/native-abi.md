@@ -138,6 +138,69 @@ typedef int (NATIVE_CALL* NativeCancelCheck)(void* context);
 | `Native_AbiVersion` | T0.2 | 可用 | 无输出缓冲 | 不适用 | 握手用，永不失败 |
 | `Native_Version` | T0.2 | 可用 | 调用方缓冲区 ≥ 32 字符 | 不适用 | 验证调用链的探针 |
 | `Native_GetSmbios` | T1.3 | 占位 `NOT_IMPL` | 调用方 `byte[]` + `written` 回填 | 不适用 | 需提权，接入前须评估 `AccessDenied` |
+| `Native_QuerySmart` | T1.3 | 可用（需提权） | 调用方 `NativeSmartInfo[]`（元素个数 ≤ `NATIVE_SMART_CAPACITY_MIN`） | 支持 `NativeCancelCheck` | ATA 走 `SMART READ DATA (0xD0)`，NVMe 走健康日志 `0x02`；全程只读 |
 | `Native_ScanVolume` | T3.2 | 占位 `NOT_IMPL` | 调用方批量缓冲（≤4096/批） | 支持 `NativeCancelCheck` | 目标：150 万文件 < 8s（§6 预算） |
+
+### 9.1 `Native_QuerySmart` 的权限语义（重要）
+
+**先澄清一个常见误解**：并非所有盘的 SMART 都需要提权。
+
+| 通道 | 需要的权限 | 说明 |
+|---|---|---|
+| NVMe 健康日志（`IOCTL_STORAGE_QUERY_PROPERTY` + `StorageDeviceProtocolSpecificProperty`） | **不需要提权** | 走标准存储 IOCTL，普通用户即可读。**2026-09-23 非提权实测通过**：读到 54℃ / 寿命 98% / 通电 7269h |
+| ATA 直通（`IOCTL_ATA_PASS_THROUGH_DIRECT` + `SMART READ DATA 0xD0`） | **需要提权** | 直通命令绕过驱动过滤，属特权操作 |
+
+不过，非提权时打开 `\\.\PhysicalDriveN` **句柄**这一步本身就可能被 `ERROR_ACCESS_DENIED` 拒绝
+（取决于盘的协议与驱动栈），所以对外仍按"可能需要提权"处理。
+
+若把权限错误与"该盘不支持 SMART" 混为一谈，UI 就会把**权限不足误报成硬盘健康**——这是最危险的误报。
+
+因此本入口约定：
+
+| 情形 | 返回值 | `count` | 上层应展示 |
+|---|---|---|---|
+| 至少读到一块盘（其余盘可能不支持） | `NATIVE_OK` | > 0 | 逐盘状态，不支持的盘标 `isAvailable = 0` |
+| 一块盘都打不开，且错误是权限 | `NATIVE_ERR_ACCESS_DENIED` | 0 | **"需要管理员权限"**，不得显示绿色徽章 |
+| 一块盘都打不开，且错误是设备不存在 | `NATIVE_OK` | 0 | "未检测到物理硬盘" |
+| 调用方取消 | `NATIVE_ERR_CANCELLED` | 已写入条数 | 展示已完成部分 |
+
+**关键实现点**：权限被拒时**不写出零值条目**。否则上层拿到一条 `isAvailable = 0` 的记录，
+无法区分"读不到"与"读到 0"，会把权限问题渲染成"该盘 SMART 不可用"。
+
+托管侧由 `ISmartService` + `StorageHealthReport.RequiresElevation` 承接该语义，
+健康分级集中在 `SmartService.Evaluate`（阈值常量与实现同文件）。
+
+### 9.2 运行期提权契约（`IElevationService`）
+
+`AccessDenied` 之后的应用层出路是**运行期自提权**，由 `IElevationService` 承接：
+
+| 方法 | 语义 |
+|---|---|
+| `RestartElevated()` | 以 `runas` 拉起自身新进程；成功返回 `ElevationResult.Requested` |
+| `ElevationResult.Declined()` | 用户在 UAC 点「否」（`Win32Exception.NativeErrorCode == 1223`） |
+| `ElevationResult.Failed(reason)` | 其他失败原因，交给 UI 展示 |
+
+**三条硬约束**（均已落地并注释）：
+
+1. **提权必须拉起新进程**。Windows 不允许已启动进程原地提升完整性级别，本进程只能退出，
+   不能在当前进程里"取管理员令牌"。
+2. **`UseShellExecute = true` 是必需的**。否则 `ProcessStartInfo.Verb = "runas"` 会被静默忽略，
+   进程以原权限重启而调用方毫无察觉。
+3. **新进程起来后本进程必须尽快退出**。`App` 里有单实例 `Mutex`，旧进程不退会让新实例
+   直接自我关闭——表现为"点了提权按钮，程序整个消失了"。
+
+**不要用 `Assembly.Location` 取自身路径**：单文件发布下它返回空字符串。
+用 `Environment.ProcessPath`。
+
+### 9.3 传感器侧的内核驱动依赖（PawnIO）
+
+严格说这不属于 ABI 契约，但同样是一个"缺了就静默降级"的坑，登记在此以免再被误判为程序缺陷。
+
+`LibreHardwareMonitorLib` 0.9.6 起把内核态访问层从 WinRing0 换成 **PawnIO**
+（WinRing0 被 Microsoft Defender 判为易受攻击驱动并全量下架）。
+**未安装 PawnIO 时**：CPU 的全部温度/倍频/功耗读数为 `null`，而 GPU（NVAPI）与 NVMe（存储 IOCTL）照常可读。
+
+托管侧由 `SensorDiagnostics.IsPawnIoAvailable()` 检测，并经
+`SensorSnapshot.CpuTemperatureNeedsKernelDriver` 传给 UI 显式提示安装方法。
 
 **MVP0 允许接入的范围**：仅上表标记为"可用"者。任何需要提权、写磁盘、修改系统状态的能力，默认不得进入 MVP0 链路（G9）。

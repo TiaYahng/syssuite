@@ -9,6 +9,7 @@ public enum NavPage
     Security,
     Desktop,
     SoftwareHub,
+    Benchmark,
     Toolbox,
     Settings
 }

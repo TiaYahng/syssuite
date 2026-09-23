@@ -1,10 +1,13 @@
 using System.ComponentModel;
 using System.Diagnostics;
+using System.Globalization;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
+using System.Windows.Media;
 using System.Windows.Media.Animation;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Win32;
 using SysSuite.Core.Abstractions;
 using SysSuite.Core.Abstractions.System;
 
@@ -20,12 +23,22 @@ public partial class SystemInfoPage : UserControl
 
     private readonly IHardwareInfoService hardwareInfoService;
     private readonly IMonitorService monitorService;
+    private readonly IReportExporter reportExporter;
+    private readonly ISensorService sensorService;
+    private readonly ISmartService smartService;
+    private readonly IElevationService elevationService;
+    private HardwareInfo? lastHardwareInfo;
 
     public SystemInfoPage()
     {
         InitializeComponent();
-        hardwareInfoService = ((App)Application.Current).Services.GetRequiredService<IHardwareInfoService>();
-        monitorService = ((App)Application.Current).Services.GetRequiredService<IMonitorService>();
+        var services = ((App)Application.Current).Services;
+        hardwareInfoService = services.GetRequiredService<IHardwareInfoService>();
+        monitorService = services.GetRequiredService<IMonitorService>();
+        reportExporter = services.GetRequiredService<IReportExporter>();
+        sensorService = services.GetRequiredService<ISensorService>();
+        smartService = services.GetRequiredService<ISmartService>();
+        elevationService = services.GetRequiredService<IElevationService>();
         monitorService.SampleReady += OnSampleReady;
         Loaded += OnLoaded;
         Unloaded += OnUnloaded;
@@ -34,7 +47,10 @@ public partial class SystemInfoPage : UserControl
     private async void OnLoaded(object sender, RoutedEventArgs args)
     {
         monitorService.Start();
+        UpdatePauseResumeButton();
+        UpdateWindowButtons();
         await RefreshAsync();
+        await RefreshSensorsAsync();
     }
 
     private void OnUnloaded(object sender, RoutedEventArgs args)
@@ -90,6 +106,42 @@ public partial class SystemInfoPage : UserControl
         }
     }
 
+    private async void OnExportReportClick(object sender, RoutedEventArgs args)
+    {
+        if (lastHardwareInfo is null)
+        {
+            StatusText.Text = "请先刷新获取硬件信息，再导出报告。";
+            return;
+        }
+
+        // Filter 顺序必须与 ReportFormats.All 保持一致，才能直接由 FilterIndex 映射到格式
+        var dialog = new SaveFileDialog
+        {
+            Title = "导出系统信息报告",
+            FileName = BuildDefaultReportName(ReportFormat.Html),
+            Filter = "文本报告 (*.txt)|*.txt|网页报告 (*.html)|*.html|JSON 数据 (*.json)|*.json",
+            FilterIndex = 2,
+            AddExtension = true,
+            OverwritePrompt = true
+        };
+
+        if (dialog.ShowDialog() != true)
+        {
+            return;
+        }
+
+        var format = ReportFormats.All[Math.Clamp(dialog.FilterIndex - 1, 0, ReportFormats.All.Count - 1)];
+        StatusText.Text = "正在导出报告...";
+
+        var result = await reportExporter.ExportAsync(lastHardwareInfo, format, dialog.FileName);
+        StatusText.Text = result.IsSuccess
+            ? $"已导出{ReportFormats.GetDisplayName(format)}报告：{result.Value}"
+            : $"导出失败：{result.Message}";
+    }
+
+    private static string BuildDefaultReportName(ReportFormat format)
+        => string.Create(CultureInfo.InvariantCulture, $"SysSuite-系统信息-{DateTime.Now:yyyyMMdd-HHmmss}{ReportFormats.GetExtension(format)}");
+
     private async Task RefreshAsync()
     {
         StatusText.Text = "正在获取硬件信息...";
@@ -101,6 +153,7 @@ public partial class SystemInfoPage : UserControl
         }
 
         var info = result.Value;
+        lastHardwareInfo = info;
         StatusText.Text = $"计算机：{info.ComputerName}";
         CpuText.Text = $"{info.CpuName} · {info.PhysicalProcessors} 颗 / {info.LogicalProcessors} 逻辑核心";
         MotherboardText.Text = string.IsNullOrWhiteSpace(info.Motherboard) ? "主板：未知" : $"主板：{info.Motherboard}";
@@ -134,13 +187,20 @@ public partial class SystemInfoPage : UserControl
 
     private void OnSampleReady(object? sender, MonitorSample sample)
     {
-        Dispatcher.BeginInvoke(() =>
+        Dispatcher.BeginInvoke(async () =>
         {
             CpuUsageText.Text = $"{sample.CpuUsagePercent:F1}%";
             MemoryUsageText.Text = $"{sample.MemoryUsedPercent:F1}%";
             DiskReadText.Text = FormatBytesPerSecond(sample.DiskReadBytesPerSecond);
             DiskWriteText.Text = FormatBytesPerSecond(sample.DiskWriteBytesPerSecond);
             NetworkText.Text = $"{FormatBytesPerSecond(sample.NetworkReceivedBytesPerSecond)} / {FormatBytesPerSecond(sample.NetworkSentBytesPerSecond)}";
+
+            RedrawTrend();
+
+            if (++sensorTickCount % SensorRefreshTicks == 0)
+            {
+                await RefreshSensorsAsync();
+            }
         });
     }
 

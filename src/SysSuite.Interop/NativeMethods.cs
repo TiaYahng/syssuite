@@ -38,6 +38,14 @@ internal static partial class NativeMethods
     [LibraryImport(LibraryName, EntryPoint = "Native_GetSmbios")]
     internal static unsafe partial int GetSmbios(byte* buffer, int capacity, out int written);
 
+    [LibraryImport(LibraryName, EntryPoint = "Native_QuerySmart")]
+    internal static unsafe partial int QuerySmart(
+        NativeSmartInfo* buffer,
+        int capacity,
+        out int count,
+        NativeCancelCheck? isCancelled,
+        IntPtr context);
+
     [LibraryImport(LibraryName, EntryPoint = "Native_ScanVolume", StringMarshalling = StringMarshalling.Utf16)]
     internal static partial int ScanVolume(
         string volume,

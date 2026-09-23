@@ -1,3 +1,5 @@
+using System.Text.Json.Serialization;
+
 namespace SysSuite.Core.Abstractions.System;
 
 public sealed record HardwareInfo
@@ -25,8 +27,11 @@ public sealed record DriveInfo(
     long TotalBytes,
     long FreeBytes)
 {
+    // 派生值：报告 JSON 不进冗余字段，由消费方按需计算
+    [JsonIgnore]
     public long UsedBytes => TotalBytes - FreeBytes;
 
+    [JsonIgnore]
     public double UsedPercent => TotalBytes <= 0 ? 0 : Math.Clamp(UsedBytes * 100d / TotalBytes, 0, 100);
 }
 

@@ -12,4 +12,13 @@
   <ItemGroup>
     <PackageReference Include="Microsoft.Extensions.Hosting" />
   </ItemGroup>
+
+  <!-- T0.6 品牌资产：托盘复用主程序的多尺寸图标（嵌入为资源，避免运行时路径依赖） -->
+  <ItemGroup>
+    <EmbeddedResource Include="..\SysSuite.UI\Assets\App.ico" LogicalName="SysSuite.Watchdog.App.ico" />
+  </ItemGroup>
+
+  <PropertyGroup>
+    <ApplicationIcon>..\SysSuite.UI\Assets\App.ico</ApplicationIcon>
+  </PropertyGroup>
 </Project>

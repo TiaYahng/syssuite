@@ -17,6 +17,10 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 
 add_library(SysSuite.Native SHARED
   src/native_api.cpp
+  src/native_smart.cpp
+  src/native_smart_common.cpp
+  src/native_smart_ata.cpp
+  src/native_smart_nvme.cpp
 )
 
 target_include_directories(SysSuite.Native PUBLIC

@@ -32,6 +32,7 @@ public partial class MainWindow : Window
         new(NavPage.Security, "🛡️", "安全中心"),
         new(NavPage.Desktop, "🖼️", "桌面整理"),
         new(NavPage.SoftwareHub, "🔄", "软件管家"),
+        new(NavPage.Benchmark, "📊", "性能跑分"),
         new(NavPage.Toolbox, "🧰", "工具箱")
     ];
 

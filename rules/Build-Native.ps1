@@ -162,7 +162,11 @@ $common = @(
     "/I$(Join-Path $nativeDir 'include')",
     "/Fo$objDir\",
     "/Fe$dll",
-    (Join-Path $nativeDir 'src/native_api.cpp')
+    (Join-Path $nativeDir 'src/native_api.cpp'),
+    (Join-Path $nativeDir 'src/native_smart.cpp'),
+    (Join-Path $nativeDir 'src/native_smart_common.cpp'),
+    (Join-Path $nativeDir 'src/native_smart_ata.cpp'),
+    (Join-Path $nativeDir 'src/native_smart_nvme.cpp')
 )
 
 if ($Configuration -eq 'Debug') {
