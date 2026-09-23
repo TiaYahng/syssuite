@@ -54,11 +54,16 @@
 | M0 | 仓库 + 架构骨架 + Interop + UI 壳 + Watchdog 骨架 | 2 周 | ABC | [~] | ~95%；T0.2 已完整闭环（C++ 本机编译通过 + FFI 冒烟真实执行全绿）；剩余缺口：app.manifest 未声明 x64、既有 P/Invoke 未归拢、Clang-Tidy 未接入、Catch2 待 CI |
 | M1 | 系统信息 + 监控 + 基准测试 | 2 周 | C 为主 | [x] | **已完成**；T1.1~T1.6 全部落地，提权真机实测闭环（SMART 全字段 + GPU/SSD 温度）。唯一遗留：CPU 温度需用户装 PawnIO（D15） |
 | M2 | 卸载器（完整） | 3 周 | B 为主 | [x] | ~95%；T2.1~T2.7 均有真实实现且可用 |
-| M3 | 磁盘清理（MFT 扫描 + 规则引擎） | 3 周 | BC | [~] | ~80%；T3.1/T3.3/T3.4 完成；T3.2 已用 C# P/Invoke 实现（偏离计划的 C++ 原生通道）且性能未实测；T3.5 保持冻结 || M4 | 更新控制 | 1 周 | B | [ ] | 0% |
+| M3 | 磁盘清理（MFT 扫描 + 规则引擎） | 3 周 | BC | [~] | ~80%；T3.1/T3.3/T3.4 完成；T3.2 已用 C# P/Invoke 实现（偏离计划的 C++ 原生通道）且性能未实测；T3.5 保持冻结 |
+| M4 | 更新控制 | 1 周 | B | [ ] | 0%；未开工 |
 | M5 | 安全中心 + 防护控制 + 软件管家 | 3 周 | B | [ ] | 0%；`SecurityPage`/`SoftwareHubPage` 仍为 11 行 `InitializeComponent()` 空壳（XAML 只有标题 + "MVP0 骨架"占位文案） |
 | M6 | 桌面整理 | 4~6 周 | C 为主 | [ ] | 0%；`DesktopPage` 仍为空壳 |
 | M7 | 搜索 / 本地化 / Ribbon / 工具箱 / 打包 / 签名 / 灰度 | 3 周 | A | [ ] | 0%；`installer/` 为空目录，无打包与签名（D18）；`ToolboxPage` 亦为空壳 |
 | M8 | 测试与质量横切（贯穿，见 §5） | 不单列 | ABC | [~] | ~15%；仅 T8.1 的 C# 静态分析落地（`.editorconfig` + `EnableNETAnalyzers` + `TreatWarningsAsErrors`），T8.2/T8.3/T8.4 未开工 |
+
+**当前实施完成度：M0/M1/M2 已闭环，M3 约 80%；M4~M8 全部未开工。**
+
+**状态图例**：`[x]` 已闭环（可验收）；`[~]` 大部分完成、有明确登记缺口；`[ ]` 未开工。
 
 **总计约 21~23 周**
 
@@ -695,7 +700,7 @@ MVP0 链 ─ T0.0→T0.1→T0.2→T0.4→T0.6→T0.3→T0.5→T2.1→T1.1/T1.4�
 
 ---
 
-## 11. 架构偏差与现状登记（2026-09-22 校准）
+## 11. 架构偏差与现状登记（2026-09-23 校准）
 
 全部结论来自对 `src/` 实际代码的核对，不是对本文档勾选的复述。
 
@@ -714,7 +719,7 @@ MVP0 链 ─ T0.0→T0.1→T0.2→T0.4→T0.6→T0.3→T0.5→T2.1→T1.1/T1.4�
 | D9 | **已解决（2026-09-22）**：C++ 已在本机用 MSVC 14.51 真实编译通过（`/W4` 零告警），产出 x64 DLL 并导出全部 4 个 `Native_*` 符号；FFI 冒烟由 7 项 Skip 转为真实执行（测试 41 → 48 全绿）。**此前的"本机无 CMake/MSVC"系误判** —— VS 装在 `D:\ai_era\...`，未装在 `C:\Program Files` | 无（已闭环） | 见 D10：cmake 生成器探测仍不可用，统一改用 `rules/Build-Native.ps1` |
 | D10 | **CMake 生成器探测在本机失败**：`cl.exe` 明明存在，`cmake -G "Visual Studio 18 2026"` 仍报 `No CMAKE_CXX_COMPILER could be found`（生成器需经 MSBuild 解析 `VCTargetsPath`）。另 `vcvarsall.bat` 会调用 `reg.exe`，在受限环境被拦截 | 依赖 cmake 的构建步骤在本机无法执行；`CMakeLists.txt` 的正确性本机无从验证 | 已新增 `rules/Build-Native.ps1` 绕过二者（直接定位 MSVC + 手写 `INCLUDE`/`LIB`），CI 的 dotnet job 已切换；`CMakeLists.txt` 仅保留给 IDE 与 Catch2 job |
 | D11 | **Catch2 侧未验证**：`tests/SysSuite.Native.Tests` 依赖 CMake FetchContent 联网拉 Catch2，本机 cmake 不可用（D10），故 7 个契约用例从未执行 | C++ 侧契约测试的实际覆盖仍为 0，只有 C# 侧冒烟覆盖 | 由 CI native job 验证；若 CI 的 cmake 同样受阻，改为把 Catch2 amalgamated 头文件纳入仓库并复用 `Build-Native.ps1` 编译 |
-| D12 | **原生 DLL 未纳入构建流程**：DLL 目前靠 `Build-Native.ps1 -Deploy` 手工复制到 `bin/`，不被 `dotnet build` 感知，`clean` 后需重新执行 | 开发者 clone 后直接 `dotnet test` 会遇到 FFI 冒烟 Skip（不会误报失败，但覆盖不完整） | 在 `SysSuite.Interop.csproj` 加 MSBuild target 自动调用构建脚本，或把已编译 DLL 按 RID 纳入 `runtimes/win-x64/native` |
+| D12 | **已解决（2026-09-23）**：原生 DLL 已纳入常规构建流程。`SysSuite.Interop.csproj` 的 `BuildNativeModule` 目标（`AfterTargets="Build"`）负责构建，`SysSuite.Tests.csproj` 的 `CopyNativeModuleForFfiTests` 目标由消费方自行拉取 DLL 到输出目录。从干净状态一次 `dotnet build` 即产出并部署，`dotnet test` 138 通过 / 0 跳过。**关键坑**：`BeforeTargets="_CopyFilesToOutputDirectory"` 不是有效挂载点（目标被静默跳过，连 Message 都不打印）；`pwsh -File` 不接受含 `..` 的路径（退出码 64）；`$(MSBuildThisFileDirectory)` 以反斜杠结尾需上溯两级。详见 §11.4 | 无（已闭环） | 见 §11.4 |
 | D13 | **基准测试用托管替代 C++ 内核**（2026-09-23）：计划要求在 `bench/` 写 C++（`SetThreadAffinity` 绑核、`FILE_FLAG_NO_BUFFERING`），实际以 C# 实现（`BenchmarkService` + `.Measure.cs` + `.Disk.cs`），理由是复用已有 .NET 构建链、避免为一个纯计算模块再维护一套 C++ 编译与 ABI | ① **CPU 未绑核**，调度抖动会进入分数，验收项「双跑方差 < 3%」比绑核版更难保证；② 磁盘用 `FileOptions.WriteThrough` 而非 `FILE_FLAG_NO_BUFFERING`，两者对页缓存与对齐的要求不同，绝对吞吐与 CrystalDiskMark 不可直接对比（仅适合横向自比） | 可接受为 MVP0 方案：跑分定位是"自机历史对比"而非权威横评。若 v1 需要对外可比分数，按原计划补 `Native_Benchmark*` 导出并复用现有 ABI |
 | D14 | **`System.Management` 被传递依赖强制升版**（2026-09-23）：`LibreHardwareMonitorLib` 0.9.6 要求 `System.Management` ≥ 10.0.2，中央包管理由 8.0.0 升至 **10.0.2** | WMI 相关 API 出现跨大版本变更（NU1109 已确认可解析）；下游若按 8.0 写法使用 `ManagementObjectSearcher` 需复核 | 已在 `PerformanceMonitorService` 侧复核并保持原用法可用；`System.Management` 属 Windows 专用包，不引入跨平台风险 |
 | D15 | **CPU 温度需要 PawnIO 内核驱动**（2026-09-23，已闭环为"显式诊断"）：`LibreHardwareMonitorLib` 0.9.6 起把内核态访问层从 WinRing0 换成 **PawnIO**（WinRing0 因被 Defender 判为易受攻击驱动而全量下架）。官方维护者原话："PawnIO provides the low level hardware layer. If you don't install it, LibreHardwareMonitor could not read or write any value (including CPU values)." **本机未安装 PawnIO**（`HKLM\SYSTEM\CurrentControlSet\Services\PawnIO` 不存在、`System32\drivers\PawnIO.sys` 不存在），实测 CPU 的 39 个传感器中**全部温度/倍频/功耗均为 `null`**，而 GPU（NVAPI）与 NVMe（IOCTL）照常可读 —— 这种"半可用"状态极易被误判为程序 bug | CPU 温度在本机永远显示 "--"；若不加说明，用户会认为程序损坏。**不是代码缺陷**，是缺一个第三方内核驱动 | 已实现 `SensorDiagnostics.IsPawnIoAvailable()` + `SensorSnapshot.CpuTemperatureNeedsKernelDriver`，UI 在检测到该状态时显式提示"请从 pawnio.eu 安装并重启"；用户安装 PawnIO 后无需改代码即可读到 CPU 温度。**是否把 PawnIO 作为安装包可选组件分发，待定**（涉及第三方驱动的分发合规与签名，归 T7.x 决策） |
@@ -727,35 +732,76 @@ MVP0 链 ─ T0.0→T0.1→T0.2→T0.4→T0.6→T0.3→T0.5→T2.1→T1.1/T1.4�
 | 门禁 | 命令 | 结果 |
 |---|---|---|
 | 源码行数 | `pwsh ./rules/Check-SourceFileSize.ps1` | **通过**（EXIT=0）；`LibreHardwareSensorService.cs` 曾因新增分类逻辑涨到 373/316，已拆出 `.Mapping.cs`（收集+映射）与 `SensorDiagnostics.cs`，主文件降回 221 行 |
-| 构建 | `dotnet build -c Debug` | 通过，0 警告 0 错误 |
-| 测试 | `dotnet test -c Debug --no-build` | 通过，**138 项全绿、0 跳过**（本轮 +57：传感器聚合 6、传感器映射 33、此前报告导出 21、硬件清洗 12 等） |
-| 原生构建 | `pwsh ./rules/Build-Native.ps1 -Configuration Release -Deploy` | **通过**；MSVC 14.51 `/W4` 零告警，x64，导出 `Native_AbiVersion` / `Native_Version` / `Native_GetSmbios` / `Native_ScanVolume` |
+| 构建 | `dotnet build -c Debug` | 通过，0 警告 0 错误（**干净状态下一次 build 即自动构建并部署原生模块**，D12 已闭环） |
+| 测试 | `dotnet test -c Debug --no-build` | 通过，**138 项全绿、0 跳过**（0 跳过即证明 FFI 冒烟真实执行） |
+| 原生构建 | `pwsh ./rules/Build-Native.ps1 -Configuration Release -Deploy` | **通过**；MSVC 14.51 `/W4` 零告警，x64，导出 `Native_AbiVersion` / `Native_Version` / `Native_GetSmbios` / `Native_ScanVolume`。**常规开发已无需手工执行**（build 自动触发） |
 | 原生构建（cmake） | `cmake -S src/SysSuite.Native -B build/native -A x64` | **本机失败**：`No CMAKE_CXX_COMPILER could be found`（偏差 D10）；已不作为构建入口 |
 | 提权真机探针 | `pwsh ./rules/Probe-Elevated.ps1 -Probe All` | **通过**；SMART 读到型号/健康/温度 54℃/寿命 98%/通电 7269h；传感器读到 GPU Core 69℃ / Hot Spot 79.8℃ / SSD Composite 55℃ |
+| CI | 推送 `dev` 触发 `.github/workflows/ci.yml` | **已触发，结果待观察**；`dotnet` job 去重后不再重复构建原生模块，`native` job 由 cmake 切换为 `Build-Native.ps1` |
 
 源码规模：约 145 个源文件；C# 侧最大文件仍在 300 行上限内。
 
 ### 11.3 下一步优先级建议
 
+**当前实施完成度**：M0 ✅ / M1 ✅ / M2 ✅ / M3 ~80%；**M4~M8 全部未开工**。
+
 1. **M1 已完成**（截至 2026-09-23）：T1.1~T1.6 六项全部落地；入口 `dotnet build` / `dotnet test`（138 通过）/
    `Check-SourceFileSize.ps1`（EXIT=0）/ `Build-Native.ps1` 四项全绿。
    **提权真机验收已闭环**：SMART 读到真实型号与全部健康字段、传感器读到 GPU/SSD 温度。
    唯一遗留：本机未装 PawnIO 导致 CPU 温度无读数（D15，缺第三方内核驱动，非代码缺陷）。
-2. **观察 CI 首次运行结果**（D5 已解决，D11 待验）—— 2026-09-23 已推送 `master` 并新建远端 `dev`
-   分支，CI（`.github/workflows/ci.yml`，监听 `[main, dev]`）**首次真正被触发**。
-   重点看 native job 的 Catch2 是否能在 GitHub 的 cmake 下跑通（本机因 D10 无法验证）。
-3. **让原生 DLL 进入常规构建流程**（D12）—— 当前需手工 `-Deploy`，`clean` 后 FFI 冒烟会退回 Skip。建议在 `SysSuite.Interop.csproj` 挂 MSBuild target，或按 RID 纳入仓库。
-3. **让原生 DLL 进入常规构建流程**（D12）—— 当前需手工 `-Deploy`，`clean` 后 FFI 冒烟会退回 Skip。建议在 `SysSuite.Interop.csproj` 挂 MSBuild target，或按 RID 纳入仓库。
-4. **归拢既有 P/Invoke 到 `SysSuite.Interop`**（D2）—— 逐服务迁移，每迁一处补错误码映射与单测。
-5. **校准后遗留的高优先项**：`main`/`dev` 分支（D5）、T2.5 的免扫描例外表。
-6. **M5/M6 开工前先做 D1 的 ViewModel 重整**，否则越往后成本越高。
-   （注：本轮新页面 `BenchmarkPage` 与拆分出的 `SystemInfoPage.*.cs` 未恶化该项——它们仍写在 code-behind，
+2. **观察 CI 首次运行结果**（D5 已解决，D11 待验）—— 2026-09-23 已推送 `master`（`86398a0`）并同步
+   远端 `dev`，CI（`.github/workflows/ci.yml`，监听 `[main, dev]`）**首次真正被触发**。
+   重点看 native job 是否能在 GitHub runner 上跑通（本机因 D10 无法验证）。
+   **注意**：Catch2 用例目前**仍未接入 CI** —— `Build-Native.ps1` 只编译 5 个 .cpp 产出 DLL，
+   没有 `-BuildTests` 开关；native job 现在是跑 Release 配置的 `dotnet test` 复验 FFI 契约。
+   要真正闭环 D11，需先把 Catch2 amalgamated 头文件纳入仓库，再给脚本加 `-BuildTests`。
+3. **归拢既有 P/Invoke 到 `SysSuite.Interop`**（D2）—— 逐服务迁移，每迁一处补错误码映射与单测。
+4. **M4 更新控制**（1 周，全部未开工）—— 工期最短的新里程碑，可作为下一个开工项。
+5. **M5/M6 开工前先做 D1 的 ViewModel 重整**，否则越往后成本越高。
+   （注：新页面 `BenchmarkPage` 与拆分出的 `SystemInfoPage.*.cs` 未恶化该项——它们仍写在 code-behind，
    但逻辑已按职责分文件，迁移时边界清晰）
-7. MVP0 收尾：T7.3 打包（D6）、T3.1 补齐剩余规则 json、T3.2 按 ABI 重构并做性能实测（D4）。
-8. 若需对外可比的跑分，按 D13 补 C++ 基准内核（绑核 + `FILE_FLAG_NO_BUFFERING`）。
+6. **MVP0 收尾**：T7.3 打包（D6/D18）、T3.1 补齐剩余规则 json、T3.2 按 ABI 重构并做性能实测（D4）。
+7. 若需对外可比的跑分，按 D13 补 C++ 基准内核（绑核 + `FILE_FLAG_NO_BUFFERING`）。
+8. **环境依赖类待办**：D17 虚拟机降级路径（需 Hyper-V / Windows Sandbox）；D15 PawnIO 是否随包分发（T7.x）。
 
+### 11.4 2026-09-23 D12 闭环：原生 DLL 进入常规构建流程
 
-### 11.4 2026-09-22 落地记录与行为变更
+此前 D12 的形态是「DLL 靠 `Build-Native.ps1 -Deploy` 手工复制，`dotnet build` 不感知，
+`clean` 后 FFI 冒烟退回 Skip」。本轮彻底修复，**从干净状态一次 `dotnet build` 即自动产出并部署**。
+
+**链路（两层，职责分明）**
+
+| 层 | 位置 | 职责 |
+|---|---|---|
+| 构建方 | `src/SysSuite.Interop/SysSuite.Interop.csproj` 的 `BuildNativeModule` | `AfterTargets="Build"` 调 `rules/Build-Native.ps1` 产出 `artifacts/native/<Config>/SysSuite.Native.dll` |
+| 消费方 | `tests/SysSuite.Tests/SysSuite.Tests.csproj` 的 `CopyNativeModuleForFfiTests` | 自行把 DLL 拉到 `$(OutDir)` 与 `runtimes\win-x64\native` |
+
+**为什么不做成"Interop 向下游投放"**：MSBuild 的 ProjectReference 求值**早于** consumer 的 `OutDir` 定稿，
+让生产方去写消费方的输出目录会依赖求值顺序，很脆。消费方自己拉取则顺序无歧义。
+
+**踩到的三个坑（都已修，写在这里避免重复）**
+
+1. **`BeforeTargets="_CopyFilesToOutputDirectory"` 不是有效挂载点** —— 目标被**静默跳过**，
+   不报错、不警告，连 `Message` 诊断都不打印。改用 `AfterTargets="Build"` 后立即生效。
+2. **`pwsh -File` 不接受路径中间含 `..`** —— 退出码 **64**（参数解析失败），表现像脚本自己出错。
+   必须 `$([System.IO.Path]::GetFullPath('...'))` 归一化。
+3. **`$(MSBuildThisFileDirectory)` 以反斜杠结尾** —— 从 `src\SysSuite.Interop\` 到仓库根要上溯**两级**。
+   只写一级会解析成 `src\rules\`。
+
+**开关**：`BuildNativeModule`（默认 true）/ 环境变量 `SYSSUITE_SKIP_NATIVE=1`；
+`ContinueOnError="WarnAndContinue"` + `Timeout=300000`，原生构建失败不拖死托管构建。
+
+**可见性**：缺 DLL 时 FFI 冒烟是**静默 Skip（零覆盖且不报错）**，故测试 csproj 里发了 `Warning`，
+CI 里解析 trx 打印 `passed/skipped/failed` 并在 `skipped ≠ 0` 时发 annotation。
+
+**CI 同步去重**：`dotnet` job 删掉了 build 之后单独执行的 `Build-Native.ps1 -Release -Deploy`
+（现在 build 阶段已自动构建，重复跑还会把 **Release 的 DLL 覆盖到 Debug 输出上**）；
+`native` job 从 cmake 切换为 `Build-Native.ps1`（D10），跑 Release 配置的 `dotnet test`。
+
+**验证**：删 `artifacts/` + 测试目录 DLL 后，一次 `dotnet build` → 138 通过 / 0 跳过 / 0 失败，
+证明 FFI 冒烟真实执行。
+
+### 11.5 2026-09-22 落地记录与行为变更
 
 - **T0.2**：`SysSuite.Native` + `SysSuite.Interop` + `docs/native-abi.md` + 两侧 FFI 冒烟 + CI native job（详见上文各任务）。
 - **D7**：`ProtectedPaths.cs` 建立并接入三处删除路径，**随之产生的行为变更（均为有意的加固）**：
@@ -764,7 +810,7 @@ MVP0 链 ─ T0.0→T0.1→T0.2→T0.4→T0.6→T0.3→T0.5→T2.1→T1.1/T1.4�
   3. 残留扫描新增目录段保护：`$Recycle.Bin`、`System Volume Information`、`WinSxS`。
 - 回归：`dotnet test` 41 通过 / 7 跳过 / 0 失败，既有卸载与清理用例无回归。
 
-### 11.5 2026-09-22 二次审视：工具链结论修正与原生构建落地
+### 11.6 2026-09-22 二次审视：工具链结论修正与原生构建落地
 
 本轮起因是「既然 `dotnet build` 能产出 `bin/`，为何声称本机无 C++ 工具链」。复核结果：**该结论错误**，连带修正如下。
 
@@ -794,7 +840,7 @@ DLL 为 x64 PE32+、内部名 `SysSuite.Native.dll`、导出唯一符号 `Native
 **落地**：新增 `rules/Build-Native.ps1`（自动定位 VS/MSVC/SDK、构造环境、编译、`-Deploy` 复制产物到各输出目录）；
 CI 的 dotnet job 由 cmake 两步切换为该脚本。测试由 41 通过/7 跳过 → **48 通过/0 跳过**。
 
-### 11.6 2026-09-23 硬件数据质量修正（T1.1 / T1.6 实测真实硬件后）
+### 11.7 2026-09-23 硬件数据质量修正（T1.1 / T1.6 实测真实硬件后）
 
 用 `WmiHardwareInfoService` 采集本机（HP 笔记本 / i7-10750H / RTX 2070 Max-Q）并导出报告，暴露三处**长期存在但此前未被发现**的数据缺陷：
 
@@ -842,3 +888,30 @@ CI 的 dotnet job 由 cmake 两步切换为该脚本。测试由 41 通过/7 跳
 
 **当前阶段结论**：M2 完成；M0/M3 接近完成；M1 起步；M4/M5/M6/M7 未开工。MVP0 的能力侧已基本齐备，
 唯一未达成的是「可安装」（`installer/` 为空）。
+
+---
+
+## v2.4 变更摘要（2026-09-23 里程碑校准）
+
+**校准方式**：逐条比对 `src/` 实际代码，而非沿用既有勾选。
+
+**上修（此前低估）**：
+- **M1 由「起步 / ~40%」改为 `[x]` 已完成** —— T1.1~T1.6 六项全部落地，且**提权真机实测闭环**
+  （SMART 全字段 + GPU/SSD 温度）。
+- **T1.1 由 `[~]` 改为 `[x]`** —— 数据质量三处缺陷修复后（OS Caption / 64 位显存 / 显示模式），
+  验收标准已达成；子项「SMBIOS 原生通道」「虚拟机内不崩溃」另行标注仍未做。
+- **M0 / M2 明确为 `[~]`/`[x]`**：M0 ~95%、M2 ~95%，缺口已逐条登记不再笼统。
+- **T0.0 转 `[x]`** —— 已推送 `master` 并建远端 `dev`。
+- **D9 / D12 转「已解决」**，D7 早已闭环。
+
+**补标（此前描述失真）**：
+- **M5 / M6 / M7 明确标注「0%；各 11 行 `InitializeComponent()` 空壳」**，此前只有百分比没有具体依据。
+- 新增「读状态表时注意『页面空壳』的判定方式」提示 —— `Pages/*.xaml.cs` 行数**不能**单独用来判断
+  功能是否实现，仓库用「宿主页 + 视图」模式（`CleanerPage` 仅 6 行，实现全在 `DiskCleanerView.*`）。
+  真正的空壳只有 4 个：`SecurityPage` / `SoftwareHubPage` / `DesktopPage` / `ToolboxPage`。
+
+**新增**：偏差 **D17**（虚拟机降级路径从未实测）、**D18**（`installer/` 为空、打包后 manifest 未验证）；
+§11.3 补「M4~M8 全部未开工」的显式结论；§11.4 记录 **D12 闭环**全过程与三个 MSBuild/PowerShell 坑。
+
+**当前阶段结论**：**M0 ✅ / M1 ✅ / M2 ✅ / M3 ~80%；M4~M8 全部未开工**。
+下一步最短路径是 M4（更新控制，1 周），或先补 D1 ViewModel 重整再开 M5/M6。
