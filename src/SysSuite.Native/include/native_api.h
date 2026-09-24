@@ -87,6 +87,36 @@ typedef int(NATIVE_CALL* NativeScanCallback)(void* context,
 // 取消检查回调：返回 0 继续；返回非 0 立即中止并返回 NATIVE_ERR_CANCELLED
 typedef int(NATIVE_CALL* NativeCancelCheck)(void* context);
 
+// ---------------------------------------------------------------------------
+// MFT / USN 卷扫描条目（T3.2）
+// ---------------------------------------------------------------------------
+
+// 一次 MFT 枚举得到的条目。
+//
+// name 指向原生侧的缓冲区，**仅在本批次回调期间有效**：调用方需要留存时必须自行拷贝。
+// 这不是偷懒 —— 150 万条记录若每条都交出所有权，分配与释放的开销会盖过扫描本身。
+//
+// 刻意不含文件大小：USN 记录里没有这个字段，需要一个 DWORDLONG 才能从
+// FILE_ID_BOTH_DIR_INFO 或 stat 另取。放一个恒为 0 的字段只会让人误以为读到了值。
+#pragma pack(push, 8)
+typedef struct NativeFileEntry
+{
+    uint64_t fileReference;
+    uint64_t parentReference;
+    uint32_t attributes;   // 同 Win32 FILE_ATTRIBUTE_*；目录为 FILE_ATTRIBUTE_DIRECTORY
+    uint32_t nameLength;   // 字符数，不含终止符
+    const wchar_t* name;   // 非 L'\0' 结尾，由 nameLength 界定
+} NativeFileEntry;
+#pragma pack(pop)
+
+// 批量条目回调：返回 0 继续；返回非 0 视为调用方请求中止。
+// entries 数组至多 NATIVE_SCAN_BATCH_MAX 项，回调返回后其中指针即失效。
+typedef int(NATIVE_CALL* NativeFileEntryCallback)(void* context,
+                                                  const NativeFileEntry* entries,
+                                                  uint32_t entryCount,
+                                                  uint64_t processed,
+                                                  uint64_t total);
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -110,6 +140,23 @@ NATIVE_API int NATIVE_CALL Native_ScanVolume(const wchar_t* volume,
                                              NativeScanCallback onBatch,
                                              void* context,
                                              NativeCancelCheck isCancelled);
+
+// MFT / USN 卷扫描（T3.2），带完整条目回调。
+//
+// 之所以新增 _2 而不是改 Native_ScanVolume 的签名：ABI 合同规定已发布签名不得就地修改，
+// 且旧入口只回传 entryIds，不足以重建路径树 —— 而拿不到路径的枚举对调用方毫无用处。
+//
+// volume 形如 L"\\\\?\\C:"。onBatch 可为 nullptr（仅探测卷是否可枚举）。
+//
+// 契约：
+//   * 需要能打开卷句柄；权限不足返回 NATIVE_ERR_ACCESS_DENIED（通常意味着要提权）。
+//   * 每批回调前检查一次取消；回调返回非 0 立即中止并返回 NATIVE_ERR_CANCELLED。
+//   * total 在枚举过程中是**已发现数量**而非预估总数：MFT 不预先暴露文件总数，
+//     给一个假的进度分母比不给更糟。
+NATIVE_API int NATIVE_CALL Native_ScanVolume2(const wchar_t* volume,
+                                              NativeFileEntryCallback onBatch,
+                                              void* context,
+                                              NativeCancelCheck isCancelled);
 
 // 枚举物理盘的 SMART 健康信息（T1.3）。
 //

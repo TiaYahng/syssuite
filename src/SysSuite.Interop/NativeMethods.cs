@@ -27,6 +27,14 @@ internal static partial class NativeMethods
     [UnmanagedFunctionPointer(CallingConvention.StdCall)]
     internal delegate int NativeCancelCheck(IntPtr context);
 
+    [UnmanagedFunctionPointer(CallingConvention.StdCall)]
+    internal unsafe delegate int NativeFileEntryCallback(
+        IntPtr context,
+        NativeFileEntry* entries,
+        uint entryCount,
+        ulong processed,
+        ulong total);
+
     [LibraryImport(LibraryName, EntryPoint = "Native_AbiVersion")]
     internal static partial int AbiVersion();
 
@@ -50,6 +58,13 @@ internal static partial class NativeMethods
     internal static partial int ScanVolume(
         string volume,
         NativeScanCallback? onBatch,
+        IntPtr context,
+        NativeCancelCheck? isCancelled);
+
+    [LibraryImport(LibraryName, EntryPoint = "Native_ScanVolume2", StringMarshalling = StringMarshalling.Utf16)]
+    internal static unsafe partial int ScanVolume2(
+        string volume,
+        NativeFileEntryCallback? onBatch,
         IntPtr context,
         NativeCancelCheck? isCancelled);
 }

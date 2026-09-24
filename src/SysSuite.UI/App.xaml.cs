@@ -63,6 +63,7 @@ public partial class App : Application, IDisposable
         services.AddSingleton<IBenchmarkService, BenchmarkService>();
         services.AddSingleton<IReportExporter, ReportExporter>();
         services.AddSingleton<IDiskInspectionService, DiskInspectionService>();
+        services.AddSingleton<ISystemSlimmingService, SystemSlimmingService>();
         services.AddSingleton<IUpdateControlService>(_ => new WindowsUpdateControlService(
             Path.Combine(
                 Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),

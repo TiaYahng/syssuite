@@ -16,6 +16,9 @@
     <PackageVersion Include="Serilog.Sinks.File" Version="6.0.0" />
     <PackageVersion Include="System.Management" Version="10.0.2" />
     <PackageVersion Include="System.Drawing.Common" Version="8.0.0" />
+    <!-- 读 dism.exe 等控制台程序的输出：它们按 OEM 代码页（zh-CN 为 936）写出，
+         用 UTF-8 解会得到乱码。.NET 8 默认不注册非 UTF 代码页，必须显式引这个包。 -->
+    <PackageVersion Include="System.Text.Encoding.CodePages" Version="8.0.0" />
     <PackageVersion Include="xunit" Version="2.5.3" />
     <PackageVersion Include="xunit.runner.visualstudio" Version="2.5.3" />
   </ItemGroup>

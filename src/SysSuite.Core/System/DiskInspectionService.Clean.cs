@@ -13,6 +13,7 @@ public sealed partial class DiskInspectionService
     public async Task<Result<CleanResult>> CleanAsync(
         DiskInspectionReport report,
         IEnumerable<CleanItem> items,
+        bool createRestorePoint = false,
         CancellationToken cancellationToken = default)
     {
         var itemList = items.ToArray();
@@ -23,6 +24,15 @@ public sealed partial class DiskInspectionService
 
         return await Task.Run(async () =>
         {
+            // T3.4：还原点是"额外保险"而不是前提，所以它的任何失败都只降级为一条消息。
+            // 放在逐批备份**之前**：备份只覆盖文件，覆盖不到回收站清空与注册表类改动。
+            var restorePointMessage = string.Empty;
+            if (createRestorePoint && itemList.Length > 0)
+            {
+                var restore = SystemRestoreService.Create($"SysSuite 清理前自动创建（{itemList.Length} 项）");
+                restorePointMessage = restore.Message;
+            }
+
             var batchId = Guid.NewGuid().ToString("N");
             var batchRoot = Path.Combine(backupRoot, batchId);
             var manifestPath = Path.Combine(batchRoot, "manifest.json");
@@ -81,7 +91,7 @@ public sealed partial class DiskInspectionService
                 }
 
                 return new Result<CleanResult>(ErrorType.None, string.Empty, new CleanResult(
-                    deletedCount, failedCount, freedBytes, errors));
+                    deletedCount, failedCount, freedBytes, errors, restorePointMessage));
             }
             catch (OperationCanceledException)
             {
@@ -174,7 +184,9 @@ public sealed partial class DiskInspectionService
 
     private static bool BackupItem(CleanItem item, string batchRoot, List<BackupEntry> entries, List<string> errors)
     {
-        if (item.Category == "空文件夹")
+        // 回收站与空文件夹没有可备份的实体：回收站里的文件本身就是"已删除"状态，
+        // 备份等于恢复，语义上不成立，因此这类条目天然不可撤销
+        if (item.Category is "空文件夹" || string.Equals(item.Category, RecycleBinService.Category, StringComparison.Ordinal))
         {
             return true;
         }
@@ -204,95 +216,5 @@ public sealed partial class DiskInspectionService
             AddError(errors, item.Path, $"备份失败：{exception.Message}");
             return false;
         }
-    }
-
-    private static void TryDeleteDirectory(string path)
-    {
-        try
-        {
-            if (Directory.Exists(path))
-            {
-                Directory.Delete(path, true);
-            }
-        }
-        catch (IOException) { }
-        catch (UnauthorizedAccessException) { }
-    }
-
-    private static bool ValidateReportItems(DiskInspectionReport report, IReadOnlyList<CleanItem> items)
-    {
-        var reportPaths = report.Items
-            .Select(item => GetFullPath(item.Path))
-            .Where(path => path is not null)
-            .ToHashSet(StringComparer.OrdinalIgnoreCase);
-        return items.All(item => GetFullPath(item.Path) is { } path && reportPaths.Contains(path));
-    }
-
-    private static bool DeleteInspectionItem(CleanItem item, List<string> errors, ref long freedBytes)
-    {
-        // G7：删除前的最后一道硬拒绝，规则引擎即使误命中也不允许穿透
-        if (ProtectedPaths.IsProtected(item.Path))
-        {
-            return AddError(errors, item.Path, $"位于系统保护路径（{ProtectedPaths.DescribeMatch(item.Path)}），已拒绝删除。");
-        }
-
-        try
-        {
-            if (item.Category is "重复文件" or "临时文件" or "大文件")
-            {
-                return DeleteDuplicateFile(item, ref freedBytes);
-            }
-
-            return item.Category == "空文件夹" && DeleteEmptyFolder(item, errors);
-        }
-        catch (IOException exception)
-        {
-            return AddError(errors, item.Path, exception.Message);
-        }
-        catch (UnauthorizedAccessException exception)
-        {
-            return AddError(errors, item.Path, exception.Message);
-        }
-    }
-
-    private static bool DeleteDuplicateFile(CleanItem item, ref long freedBytes)
-    {
-        var file = new FileInfo(item.Path);
-        if (!file.Exists)
-        {
-            return true;
-        }
-
-        var size = file.Length;
-        file.Delete();
-        freedBytes += size;
-        return true;
-    }
-
-    private static bool DeleteEmptyFolder(CleanItem item, List<string> errors)
-    {
-        var directory = new DirectoryInfo(item.Path);
-        if (!directory.Exists || IsApplicationDirectory(directory, out _))
-        {
-            return AddError(errors, item.Path, "目录已变化或属于应用目录。");
-        }
-
-        if (!IsEmptyDirectory(directory))
-        {
-            return AddError(errors, item.Path, "目录已不再为空。");
-        }
-
-        directory.Delete(false);
-        return true;
-    }
-
-    private static bool AddError(List<string> errors, string path, string message)
-    {
-        if (errors.Count < MaximumErrorMessages)
-        {
-            errors.Add($"{path}: {message}");
-        }
-
-        return false;
     }
 }

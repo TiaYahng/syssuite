@@ -54,14 +54,14 @@
 | M0 | 仓库 + 架构骨架 + Interop + UI 壳 + Watchdog 骨架 | 2 周 | ABC | [~] | ~95%；T0.2 已完整闭环（C++ 本机编译通过 + FFI 冒烟真实执行全绿）；剩余缺口：app.manifest 未声明 x64、既有 P/Invoke 未归拢、Clang-Tidy 未接入、Catch2 待 CI |
 | M1 | 系统信息 + 监控 + 基准测试 | 2 周 | C 为主 | [x] | **已完成**；T1.1~T1.6 全部落地，提权真机实测闭环（SMART 全字段 + GPU/SSD 温度）。**CPU 温度已闭环**：PawnIO v2.2.0 已装，提权后读到 47 个传感器（CPU Core 100℃ / Power 30.38W / Clock 3688MHz），见 D15 |
 | M2 | 卸载器（完整） | 3 周 | B 为主 | [x] | ~95%；T2.1~T2.7 均有真实实现且可用。**图标冷加载已优化 8.8x**（23,565ms → 2,690ms），病态单条 32,061ms → 2,263ms；顶部「卸载」按钮已按用户要求移除（右键菜单保留） |
-| M3 | 磁盘清理（MFT 扫描 + 规则引擎） | 3 周 | BC | [~] | ~80%；T3.1/T3.3/T3.4 完成；T3.2 已用 C# P/Invoke 实现（偏离计划的 C++ 原生通道）且性能未实测；T3.5 保持冻结 |
+| M3 | 磁盘清理（MFT 扫描 + 规则引擎） | 3 周 | BC | [x] | **已完成**；T3.1~T3.5 全部落地。T3.2 已按 G10 改走 C++ 原生 ABI 并完成性能实测（MFT 比目录遍历快 ~20x）；§6 的 8s 预算未达标，登记为偏差 D21 |
 | M4 | 更新控制 | 1 周 | B | [~] | ~75%；T4.1 双层开关/快照/还原/UI 已落地并单测覆盖（21 项）；T4.2 漂移自检已落地，自动轮询 Timer 与 Home 版提示未接；WaaSMedicSvc 改为仅记录方案不实现 |
 | M5 | 安全中心 + 防护控制 + 软件管家 | 3 周 | B | [ ] | 0%；`SecurityPage`/`SoftwareHubPage` 仍为 11 行 `InitializeComponent()` 空壳（XAML 只有标题 + "MVP0 骨架"占位文案） |
 | M6 | 桌面整理 | 4~6 周 | C 为主 | [ ] | 0%；`DesktopPage` 仍为空壳 |
 | M7 | 搜索 / 本地化 / Ribbon / 工具箱 / 打包 / 签名 / 灰度 | 3 周 | A | [ ] | 0%；`installer/` 为空目录，无打包与签名（D18）；`ToolboxPage` 亦为空壳 |
 | M8 | 测试与质量横切（贯穿，见 §5） | 不单列 | ABC | [~] | ~15%；仅 T8.1 的 C# 静态分析落地（`.editorconfig` + `EnableNETAnalyzers` + `TreatWarningsAsErrors`），T8.2/T8.3/T8.4 未开工 |
 
-**当前实施完成度：M0/M1/M2/D1 已闭环，M3 约 80%，M4 约 75%；M5~M8 未开工。**
+**当前实施完成度：M0/M1/M2/M3/D1 已闭环，M4 约 75%；M5~M8 未开工。**
 
 **状态图例**：`[x]` 已闭环（可验收）；`[~]` 大部分完成、有明确登记缺口；`[ ]` 未开工。
 
@@ -380,30 +380,61 @@
 
 ## M3 磁盘清理
 
-### T3.1 规则引擎  [~]  1.5 天
-
-> 校准：此前标题标 [x] 但全部子项标 [ ]，属自相矛盾。实际引擎与规则文件均已落地，
-> 但规则集只覆盖了计划清单中的一部分，故降为 [~]。
+### T3.1 规则引擎  [x]  1.5 天
 
 - [x] docs/rules-schema.md（字段：id/target/env/regex/exclude/minAgeDays/level）
 - [x] CleanRule 模型 + 校验（通配编译、重复 id 检测、正则超时保护）—— 实现为 `CleanRuleEngine.Validate`
-- [~] rules/*.json —— **只有 `rules/clean-temp.json` 一份**，已含 windows_temp / root_temp / programdata_temp / user_temp / chrome / edge / firefox / thumbnails / error_reports 共 9 条；**缺 recycle_bin、dns_cache、update_download、delivery_optimization、log_files、font_cache**
+- [x] rules/clean-temp.json —— **14 条**：windows_temp / root_temp / programdata_temp / user_temp /
+  chrome / edge / firefox / thumbnails / error_reports + 本轮补齐的 update_download /
+  delivery_optimization / log_files / font_cache / dns_cache
+- [x] 回收站：**不做逐文件规则**（`$Recycle.Bin` 是段级红线，且 `$I`/`$R` 双文件结构使逐文件删除必然
+  破坏一致性）→ 改为 `RecycleBinService` 走官方 `SHEmptyRecycleBin`；回收站是**卷级**概念，
+  只在扫描卷根时输出条目
 - [x] RuleEngine：环境变量展开 → 通配目录展开 → 枚举命中 → 白名单排除 → 按 MinAgeDays 过滤 → 输出（含风险标记）—— 实现为 `CleanRuleEngine.Enumerate`
-- [~] 每规则 ≥ 3 单测（命中/排除/空）—— 已有 `tests/SysSuite.Tests/CleanRuleEngineTests.cs`，尚未达到每规则 3 例的密度
-- 验收：规则热更新（改 json 5s 生效）
+- [x] 每规则 ≥ 3 单测 —— `CleanRuleSetTests` 由**真实规则文件驱动**（新增规则不写测试立刻失败），
+  另有 `CleanRuleProviderTests` 覆盖保护例外与热更新
+- 验收：规则热更新（改 json 5s 生效）→ `CleanRuleProvider` 按文件最后写入时间 + 长度判失效；
+  每次扫描开始时**一次性取快照**，避免扫描中途规则集变换导致同批前后判定不一致
 
-### T3.2 MFT 全盘扫描（C++）  [~]  2.5 天
+> **本轮修复的两个死结（都是"扫描得到却删不掉/规则静默失效"）：**
+>
+> 1. **规则是死的**：`ProtectedPaths` 把整棵 `Windows` 目录保护了，而 `windows-temp`、
+>    `update-download` 等规则的目标全在 `Windows` 树下 —— 意味着这些规则**扫描得到却永远被拒删**。
+>    修法不是放松保护，而是加 `CleanableRoots` **精确例外**：每一项都必须是某个保护根的
+>    **真子路径**，否则不生成例外（宁可少清一项，也不接受能越过保护根的例外）。
+> 2. **规则写错没有任何信号**：`log-files` 的 exclude 少了一层反斜杠转义，正则 `\C` 是无效转义，
+>    整条规则被**静默丢弃**。`Load` 现改为返回 `CleanRuleLoadResult`（含被拒规则与原因），
+>    测试直接断言"被拒规则数 = 0"。
 
-> ⚠ 校准：此前标 [ ]（未开始）。实际已有 `Core/System/MftFileIndexService.cs`，**用 C# P/Invoke 直接
-> 调 DeviceIoControl + FSCTL_ENUM_USN_DATA 实现了 MFT 枚举，绕开了计划中的 C++ 原生通道**。
-> 功能方向正确但偏离架构约定（违反 G10「未定义契约的原生能力不得接入 Core」），且 §6 的
-> 150 万文件 < 8s 预算从未实测。见 §11 偏差 D4。
+### T3.2 MFT 全盘扫描（C++）  [x]  2.5 天
 
-- [~] MFT/USN 枚举能力 —— **已实现（`MftFileIndexService`），但为托管 P/Invoke 而非计划中的 `Native_ScanVolume` C++ 导出**
-- [ ] `Native_ScanVolume(volume, cb, out)`：改为走 C++ 原生导出 + ABI 契约（依赖 T0.2 补建后重构）
-- [ ] C# FileIndex：ParentId→路径重建树（500 万条以上采用分层分页）
-- [ ] 非 NTFS/ReFS/动态盘降级 FindFirstFile 通道（同一接口）
-- 验收：150 万文件枚举 < 8s（§6 预算）；排除 System Volume Information/$Recycle.Bin —— **尚未实测**
+> **已按 G10 改走原生 ABI**（闭环偏差 D4）。`Native_ScanVolume2` 追加到
+> `src/SysSuite.Native/src/native_volume.cpp`（**只追加不修改** `Native_ScanVolume` 的既有 ABI）。
+> 下面保留原校准记录，性能实测结论见本节末尾。
+
+- [x] MFT/USN 枚举能力 —— C++ 导出 `Native_ScanVolume2`（`FSCTL_ENUM_USN_DATA`），
+  条目的 `name` **直接指向 DeviceIoControl 输出缓冲**（零拷贝；代价是回调返回后指针失效，已写进 `native_api.h`）
+- [x] `Native_ScanVolume2(volume, cb, out)`：走 C++ 原生导出 + ABI 契约
+- [x] C# FileIndex：ParentId→路径重建树 —— `MftFileIndexService.RebuildPaths`
+  **迭代 + 显式栈 + 沿链路径缓存**（递归版在深链/环引用上会栈溢出，已单测 3000 层深链）
+- [x] 非 NTFS/ReFS/动态盘降级 FindFirstFile 通道（同一接口，`VolumeIndexChannel` 标明走了哪条）
+- [x] 排除 `System Volume Information` / `$Recycle.Bin`
+- 验收：**实测数据见下**（§6 预算未达标，已登记为偏差 D21）
+
+> **T3.2 性能实测（本机 C: 盘，2026-09-24；此前从未实测）**
+>
+> | 通道 | 条目数 | 耗时 | 折算每百万条 |
+> |---|---|---|---|
+> | MFT（提权，冷启动） | 2,108,480 | 20,722 ms | 9.83 s |
+> | MFT 端到端含路径重建（热） | 2,108,499 | 16,018 ms | **7.6 s** |
+> | FindFirstFile 全盘（非提权） | 2,393,650 | 375,621 ms | ~157 s |
+>
+> **MFT 比目录遍历快约 20 倍**，但 §6 的「150 万文件 < 8s」**仍未达标**（折算 11.4–14.7s）。
+> 非提权下 MFT 通道如实返回"权限不足"（4ms 即返回，极易被误读成"通道坏了"）。
+>
+> 结论：**保留 USN 通道，不引入 `$MFT` 直接解析**。要达 8s 只能绕过 `FSCTL_ENUM_USN_DATA`
+> 去裸读并解析 `$MFT`（NTFS 结构解析，工作量与风险都大得多），为 1.4 倍差距不值得。
+> 详见 §11 偏差 D21。
 
 ### T3.3 大文件 / 空目录 / 重复文件  [x]  1.5 天
 - [x] 大文件：阈值筛选 TopN + 目录聚合 —— `DiskInspectionService.LargeFiles.cs`
@@ -412,18 +443,49 @@
 - 验收：构造重复集识别率 100%；含锁定文件时单条降级不崩溃
 
 ### T3.4 清理执行器  [x]  1 天
-- [x] CleanExecutor：回收站或备份后删除 —— 实现为 `DiskInspectionService.Clean.cs`，每批次写独立备份目录 + `manifest.json`
-- [~] 前置可选 SrSetRestorePoint（单日去重）—— **未做系统还原点**；`clean_history` 批次记录与撤销已落地
+- [x] CleanExecutor：回收站或备份后删除 —— 实现为 `DiskInspectionService.Clean.cs`（编排）+
+  `DiskInspectionService.Delete.cs`（删除原语），每批次写独立备份目录 + `manifest.json`
+- [x] 前置可选 `SrSetRestorePoint`（单日去重）—— 实现为 `SystemRestoreService`，由
+  `CreateRestorePointBeforeClean` 设置项控制（**默认关闭**：需管理员权限、耗时数十秒，
+  且清理本身已有逐批备份）。失败**只降级为告警**，绝不阻断清理；去重状态记在 HKCU（跨进程跨重启有效）
 - [x] 结果页提供 [撤销最近一次清理] 按钮（reversible=true 时可用）
 - [x] 双重进度（字节/条数）；失败项汇总
 - 验收：含锁定文件时任务不中断、不弹窗；撤销可还原上一批次
 
-### T3.5 系统瘦身  [ ]  2 天
-- [ ] 风险分级：L2 实验性、默认关闭；MVP0 禁止启用
-- [ ] WinSxS 分析 + DISM StartComponentCleanup（/ResetBase 独立复选 + 红字警告 + 还原点提示）
-- [ ] Windows.old 检测删除（需取得所有权）；传递优化缓存清理
-- [ ] compact /c /exe 按文件压缩（排除系统临界文件清单）
-- 验收：测试机清理后 C:\Windows 实际缩小；日志完整
+> 还原点的判定逻辑抽成纯函数 `SystemRestoreService.Decide`（策略禁用 / 单日去重 / 允许创建），
+> 因为"该不该建"必须可单测，而真正调 `srclient` 需要提权且会在本机留下还原点。
+> 「无记录」与「记录损坏」都判为**允许创建** —— 宁可多建一个，也不因状态值脏了让用户失去这道保险。
+
+### T3.5 系统瘦身  [x]  2 天
+- [x] 风险分级：L2 实验性、**双开关门控**（`EnableExperimentalFeatures` **且** `EnableSystemSlimming`）
+- [x] WinSxS 分析 + DISM StartComponentCleanup（`/ResetBase` 独立复选 + 常驻红字警告 + 还原点提示）
+- [x] Windows.old 检测（体积统计达上限即如实标注）；传递优化缓存统计
+- [x] `compact /c /exe` 按文件压缩（**排除系统临界文件：直接复用 G7 `ProtectedPaths` 白名单**）
+- 验收：compact 实测压缩 2 个文件 1,120,000 → 40,960 字节（**释放 1,079,040 字节**），
+  文件均未被删除；日志完整落盘
+- 验收（提权真机，2026-09-24）：`dism /Online /Cleanup-Image /AnalyzeComponentStore` 实测解析出
+  **可回收 10.04 GB / 可回收程序包 5 个 / DISM 建议清理 = 是**（`TotalKnownBytes = 10,780,367,912`）；
+  门控半开必拒、`C:\Windows` 等保护路径必拒均已在提权下复核
+
+> **几个刻意的设计取舍：**
+>
+> 1. **单开关不够用**：`IsEnabled` 必须是双开关。用户打开"实验性功能"往往是为了别的功能，
+>    不该顺带把组件存储清理也放出来。
+> 2. **compact 的"系统临界文件清单"改为复用 `ProtectedPaths`**：计划里写的是维护一份排除清单，
+>    但那种清单必然过期。直接用 G7 白名单（已覆盖 Windows / Program Files / 用户主目录，且 fail-closed）
+>    更安全。代价是 compact 只能作用在用户自己的数据目录上 —— 这个代价可以接受。
+> 3. **Windows.old 与传递优化缓存不由本服务删除**：前者要先取得所有权，而"取得所有权 + 递归删除"
+>    已有 `ForceDeleteService`（含确认句与备份）；后者已由 `clean-temp.json` 的 `delivery-optimization`
+>    规则覆盖。同一件危险事不该有两个实现 —— 本页只负责让用户看见有多大。
+> 4. **DISM 输出按 OEM 代码页解码**：中文系统上是 CP936，用 UTF-8 读会满屏乱码，而"日志完整"正是
+>    验收项。为此引入 `System.Text.Encoding.CodePages`（.NET 8 默认不注册非 UTF 代码页）。
+> 5. **只读分析不限开关，写入才要门控**：非提权也要能看到"这里有多大"，缺的数据如实标为"未知"
+>    （`-1`）而不是拿 0 冒充 —— 把截断值/未知值当精确值报出去，用户看到的每个数字都不可信。
+> 6. **DISM 解析的样本必须来自真机**：`AnalyzeLabels` 里的标签、`ParseSize` 的单位、以及
+>    `IsCleanupRecommended` 的判定，全部由真机输出反向确定（见偏差 D23）。本地化文本的解析
+>    一旦按直觉写，就会出现"单测与实现一起错、而 UI 给出误导结论"的组合故障 —— 这在本项目
+>    已发生两次（D22 compact、D23 DISM）。**改动任何一个解析器前，先重抓一份真输出。**
+
 
 ---
 
@@ -690,7 +752,7 @@
 | T0.7 | Watchdog 骨架 |  | [~] |  | IPC/租约已通；缺提权模式说明 |
 | T1.1~T1.6 | M1 六项 |  | [x] |  | **M1 全部落地**：T1.1（含数据质量收敛）/T1.2 温度传感器/T1.3 SMART/T1.4 监控（含折线图与暂停/时间窗）/T1.5 基准测试/T1.6 报告导出均已完成。**2026-09-23 提权真机闭环**：SMART 与传感器均读到真实数值（见 T1.2/T1.3 验收行）；新增运行期自提权 `IElevationService`。遗留：CPU 温度在本机需安装 PawnIO（D15，非代码缺陷）；Catch2 侧待 CI（D11） |
 | T2.1~T2.7 | M2 七项 |  | [x] |  | 七项均有真实实现 |
-| T3.1~T3.5 | M3 五项 |  | [~] |  | T3.1/T3.3/T3.4 完成；T3.2 托管替代且未实测；T3.5 冻结 |
+| T3.1~T3.5 | M3 五项 |  | [x] |  | 全部完成；T3.2 走原生 ABI + 已实测，8s 预算未达标（D21） |
 | T4.1/T4.2 | M4 |  | [~] |  | T4.1 双层开关 + 快照/还原 + 设置页 UI 已落地；T4.2 漂移自检已落地。**未接**：跨重启生效的真机验证（需提权）、后台自检 Timer、Home 版局限提示 UI。WaaSMedicSvc 改为仅记录方案 |
 | T5.1~T5.6 | M5 六项 |  | [ ] |  | 未开工；T5.6 高风险 |
 | T6.1~T6.5 | M6 五项 |  | [ ] |  | 未开工 |
@@ -732,9 +794,9 @@ MVP0 链 ─ T0.0→T0.1→T0.2→T0.4→T0.6→T0.3→T0.5→T2.1→T1.1/T1.4�
 | ID | 偏差 | 影响 | 建议 |
 |---|---|---|---|
 | D1 | **已解决（2026-09-23）**：新增 `PageViewModelBase`（`IsBusy`/`BusyText`/`HasError`/`ErrorText`/`DiagnosticId`/`RefreshCommand`/`CancelCommand` + `RunBusyAsync` 忙碌门控），9 个 ViewModel 全部继承它；`UninstallerPage`/`DiskCleanerView`/`DashboardPage`/`SystemInfoPage`/`SettingsPage` 的 code-behind 业务逻辑已迁入，删除 7 个 partial（`UninstallerPage.Extras/.Icons/.Interaction/.Rows`、`DiskCleanerView.Actions/.Selection/.Status`）。交互副作用抽象为 `IUninstallerInteractions`/`ICleanerInteractions`/`IUpdateControlInteractions`，ViewModel 无 WPF 依赖可单测。零 `RelayCommand(_ => { })` 空壳 | 无（已闭环）。**副作用**：CA1001 要求持有 `IDisposable` 字段的类型自身实现 `IDisposable`，5 个页面因此加了 `IDisposable` 并在 `Unloaded` 中先解绑事件再 Dispose | 后续新页面一律直接继承 `PageViewModelBase` |
-| D2 | **既有 P/Invoke 仍散落在 Core 各服务内**（`IconCacheService.Extract`、`MsiAppEnumerator.Native`、`UsnJournalMonitor`、`ForceDeleteService.Native`、`MftFileIndexService`）。`SysSuite.Interop` 已于 2026-09-22 补建，但**只有新能力走这层，旧调用未迁移** | 违反 T0.1 的分层约定与 G10；无法统一审计原生调用的错误码/内存所有权 | 按 T8.1 分批把旧 P/Invoke 迁到 `SysSuite.Interop`，每迁一处补对应错误码映射 |
+| D2 | **既有 P/Invoke 仍散落在 Core 各服务内**（`IconCacheService.Extract`、`MsiAppEnumerator.Native`、`UsnJournalMonitor`、`ForceDeleteService.Native`）。`SysSuite.Interop` 已于 2026-09-22 补建，但**只有新能力走这层，旧调用未迁移**。~~`MftFileIndexService`~~ 已随 T3.2 迁出（2026-09-24） | 违反 T0.1 的分层约定与 G10；无法统一审计原生调用的错误码/内存所有权 | 按 T8.1 分批把旧 P/Invoke 迁到 `SysSuite.Interop`，每迁一处补对应错误码映射 |
 | D3 | **计划用 C++ 原生、实际用托管替代**：主板/BIOS 走 WMI 而非 `Native_GetSmbios` | 功能可用，但拿不到 WMI 不覆盖的固件细节；T1.1 验收标准仍未完全达成 | 可接受为 MVP0 方案，v1 前按 T1.1 补原生通道 |
-| D4 | **MFT 扫描用 C# P/Invoke 直接调 `DeviceIoControl`**（`MftFileIndexService`），而非计划的 `Native_ScanVolume` C++ 导出 | 绕过 G10 的 ABI 契约要求；§6 的「150 万文件 < 8s」预算从未实测 | T0.2 补建后按 T3.2 重构，并补性能实测 |
+| D4 | **MFT 扫描用 C# P/Invoke 直接调 `DeviceIoControl`**（原 `MftFileIndexService` 实现），而非计划的 `Native_ScanVolume` C++ 导出 | 绕过 G10 的 ABI 契约要求；§6 的「150 万文件 < 8s」预算从未实测 | **已解决（2026-09-24）**：追加 `Native_ScanVolume2` 到 `src/SysSuite.Native/src/native_volume.cpp`（只追加不修改既有 ABI），C# 侧经 `SysSuite.Interop` 走原生通道，非 NTFS/无权限时降级 FindFirstFile；性能已实测（结论见偏差 D21） |
 | D5 | **分支命名与 G2 不符**：只有 `master`，无 `main`/`dev`，无分支保护。**更严重的是**：`.github/workflows/ci.yml` 的 `on.push.branches` 写的是 `[main, dev]`，而仓库实际只有 `master` ⇒ **推送从未触发过 CI**（`on.pull_request` 仍会触发） | CI 形同虚设；`dotnet build`/`test`/行数门禁/Catch2 从未在服务端跑过，本地绿不代表 CI 绿 | 建 `main`/`dev` 并开启保护；过渡期可先把远端 `dev` 分支建起来（见 §11.5） |
 | D6 | **`installer/` 目录为空**，无打包脚本 | MVP0 的「可安装」验收未达成，T7.3 未开工 | 按 T7.3 补 Inno Setup 配置 |
 | D7 | **已解决（2026-09-22）**：`src/SysSuite.Core/System/ProtectedPaths.cs` 已建立并接入 `ForceDeleteService`、`LeftoverScanner`、`DiskInspectionService.Clean` 三处。**剩余**：KnownFolder 免扫描例外表未单列，目前由 `ProtectedSegments` 覆盖 | 无（白名单已共享） | T2.5 需要时再抽独立的免扫描例外表 |
@@ -751,25 +813,29 @@ MVP0 链 ─ T0.0→T0.1→T0.2→T0.4→T0.6→T0.3→T0.5→T2.1→T1.1/T1.4�
 | D17 | **"虚拟机内不崩溃"从未验证**：T1.1 验收含"虚拟机内不崩溃"，`SensorSnapshot.Unavailable` 的降级路径也是为此设计的（`MarkUnsupported` / `Readings.Count == 0` 分支），但**本机无 Hyper-V 环境，该路径只用单元测试覆盖了逻辑，未在真实 VM 里跑过**。同理 T8.3 的"Hyper-V 兼容矩阵"未开工 | 虚拟机/无传感器主板的降级行为是**推断正确**而非实测正确；若 VM 里 `Computer.Open()` 抛出未预期的异常类型，`catch` 虽会兜住但文案可能误导 | 归入 T8.3（需 Hyper-V 环境）。在此之前，降级路径的单元测试是唯一保障；建议至少用 `WmiHardwareInfoService` 在 Windows Sandbox 里做一次冒烟 |
 | D19 | **图标抽取存在病态慢路径（已修复，2026-09-23）**：卸载器冷启动慢被误判为"枚举慢"，实测瓶颈在图标解析 —— 单条 `MPICH.NT.1.2.1` 占 8,901ms（整体 82%）。根因是其卸载命令推导到 `C:\WINDOWS\IsUninst.exe`（InstallShield 5/6 stub，**畸形 PE**），`ExtractAssociatedIcon` 在其上最坏耗时 **32,061ms**。修复四措：① 黑名单已知的 InstallShield/Nullsoft stub；② 按快捷方式打分择优而非逐条硬解；③ 图标抽取加**硬超时 5 秒**（2 秒会在并行测试负载下误杀正常 `testhost.exe`）；④ 结果入 `IconCacheService` 持久化 | 冷加载从 **23,565ms 降到 2,690ms（8.8x）**，病态单条 **32,061ms → 2,263ms**；超时兜底后任何单条都不会拖垮整页 | 已闭环（21 项测试：`IconShortcutScoringTests` + `UninstallerBenchmarkTests`）。**阈值 5 秒是实测折中，不要为"更快"下调到 2 秒** —— 会误杀正常进程 |
 | D20 | **M4 顶层设计修正（2026-09-23）**：初版 `Verify()` 按**当前**档位反推期望值，在从未改过的机器上把 `UsoSvc` 的 Auto 误报成"被系统回滚"（真机探针实测 1 条假漂移）；初版 `DeriveMode` 只看 `NoAutoUpdate`，在本机 `AUOptions=2` 的形态下误报成"自动更新"。另 `RegistryKey.OpenSubKey` 在"键存在但无读权限"时**抛 `SecurityException`**（非返回 null），真机首次运行直接崩溃 | 三条都是"看起来能用、实际给出错误结论"，比崩溃更危险 —— 用户会据此误判系统状态 | 已修复：快照增记 `TargetMode` 作为自检基准（无目标档位即静默）；`DeriveMode` 改为 `ExpectedValues` 的严格逆映射；所有注册表读包 try/catch 吞 `SecurityException`。详见 M4 章"实现要点" 7 条 |
+| D21 | **MFT 枚举未达 §6 的「150 万文件 < 8s」预算（2026-09-24 实测）**：本机 C: 盘 2,108,480 条 MFT 记录冷启动 20,722 ms（9.83 s/百万条），端到端含路径重建热启动 16,018 ms（7.6 s/百万条）；折算 150 万条约 **11.4–14.7 s**，超预算 1.4–1.8 倍 | 预算是立项时的假设值，从未实测。MFT 相对 FindFirstFile（~157 s/百万条）已快约 20 倍，但**仍未进 8s** | **接受偏差，不追优化**。要达 8s 必须绕过 `FSCTL_ENUM_USN_DATA` 裸读并解析 `$MFT`（NTFS 结构解析：记录头/属性链/常驻与非常驻数据运行表），工作量与出错风险都远大于 1.4 倍收益。若将来确需 8s，这是唯一路径，且应新建独立里程碑而非塞进 T3.2 |
+| D23 | **DISM 分析输出解析三处缺陷，导致"可回收体积"长期显示为未知（2026-09-24 提权真机探针发现）**：① 标签写成"备份和已禁用功能"，真机是"备份和已禁用**的**功能"（原文 `Backups and Disabled Features`）—— 少一个字，整条解析**静默落空**，`体积` 恒为 `-1`；② 中文输出里体积为 0 时 DISM 写的是**英文单位** `0 bytes`（它不翻译 0），而 `ParseSize` 用 `B\b` 收尾，匹配不到 `bytes`（B 后面还是字母）；③ `IsCleanupRecommended` 只按措辞匹配，真机形态却是「推荐使用组件存储清理 : 是」这种「标签 : 值」—— 按措辞匹配会漏报，而改回按标签匹配又会把「… : 否」读成建议清理 | UI 如实显示"组件存储暂无明显可回收项"，而真机实际有 **10.04 GB** 可回收 —— 用户据此放弃清理。三条都是"不报错但给出错误结论"，比崩溃更危险 | 已修复（三处一起改）：标签补"的"并保留旧写法；`ParseSize` 改 `(?![A-Za-z])` 收尾并把 `bytes/byte` 纳入单位表；`IsCleanupRecommended` 改为**先取值域再判肯定/否定词**（`DecliningValues` / `AffirmingValues`），无分隔符的整句措辞才退回按措辞判定。单测样本全部换成真机原样输出（含 4 条 `: 否` 负例）。守护：解析器拆到 `SystemSlimmingService.Parse.cs` 单独维护 |
+| D22 | **compact 节省量解析错到"永远为 0"（2026-09-24 真机探针发现）**：`compact /c /exe` 的真实输出是 `sample0.exe  560000 : 20480 = 27.3 到 1 [OK]` —— 等号在数字对**之后**；我按 `= 原始 : 压缩后` 写正则，于是永远匹配不到，实测压缩成功却报 `FreedBytes=0`。**单测也没抓到，因为测试数据是按我那条错正则编的** | "看起来能用、实际给错结论"：用户压缩了几百 MB 却看到"0 字节"，会认为功能无效 | 已修复：优先读汇总行（`总共 1,120,000 字节的数据保存在 40,960 字节中`，含千分位，由 compact 自己累加更可信），认不出才退回逐文件累加；单测改用**真机捕获的原样输出**。教训：断言格式类解析时必须拿真实输出当样本，不能按实现反编测试数据 —— **同一根因在 D23 上又犯了一次** |
 | D18 | **`installer/` 为空，无安装包**（2026-09-23 仍未动）：MVP0 验收明写"安装包可运行"，但 T7.3（打包与自更新）未开工，`installer/` 目录为空 | MVP0 无法交付给真实用户；`app.manifest` 的提权声明（`requireAdministrator`）也从未在**打包后**的 exe 上验证过 —— 目前只在开发态 exe 上验证过 | 按 T7.3 补 Inno Setup 配置；打包后必须重新验证提权与首次启动流程（开发态 manifest 生效 ≠ 安装包内生效） |
 
-### 11.2 当前门禁状态（2026-09-23 实测）
+### 11.2 当前门禁状态（2026-09-24 实测）
 
 | 门禁 | 命令 | 结果 |
 |---|---|---|
 | 源码行数 | `pwsh ./rules/Check-SourceFileSize.ps1` | **通过**（EXIT=0）；`LibreHardwareSensorService.cs` 曾因新增分类逻辑涨到 373/316，已拆出 `.Mapping.cs`（收集+映射）与 `SensorDiagnostics.cs`，主文件降回 221 行 |
 | 构建 | `dotnet build -c Debug` | 通过，0 警告 0 错误（**干净状态下一次 build 即自动构建并部署原生模块**，D12 已闭环） |
-| 测试 | `dotnet test -c Debug --no-build` | 通过，**174 项全绿、0 跳过**（0 跳过即证明 FFI 冒烟真实执行）。含 M4 新增 21 项、D1 重构后回归项；注：`IconCacheTests.IconCacheResolvesUnquotedExecutableWithIconIndex` 在并行满载下偶发失败，单独重跑必过（图标抽取的时序 flake，非逻辑缺陷） |
-| 原生构建 | `pwsh ./rules/Build-Native.ps1 -Configuration Release -Deploy` | **通过**；MSVC 14.51 `/W4` 零告警，x64，导出 `Native_AbiVersion` / `Native_Version` / `Native_GetSmbios` / `Native_ScanVolume`。**常规开发已无需手工执行**（build 自动触发） |
+| 测试 | `dotnet test -c Debug --no-build` | 通过，**295 项全绿、0 跳过**（0 跳过即证明 FFI 冒烟真实执行）。含 M4 新增 21 项、M3 本轮新增 121 项、D1 重构后回归项；注：`IconCacheTests.IconCacheResolvesUnquotedExecutableWithIconIndex` 在并行满载下偶发失败，单独重跑必过（图标抽取的时序 flake，非逻辑缺陷） |
+| 原生构建 | `pwsh ./rules/Build-Native.ps1 -Configuration Release -Deploy` | **通过**；MSVC 14.51 `/W4` 零告警，x64，导出 `Native_AbiVersion` / `Native_Version` / `Native_GetSmbios` / `Native_ScanVolume` / `Native_ScanVolume2`。**常规开发已无需手工执行**（build 自动触发） |
 | 原生构建（cmake） | `cmake -S src/SysSuite.Native -B build/native -A x64` | **本机失败**：`No CMAKE_CXX_COMPILER could be found`（偏差 D10）；已不作为构建入口 |
-| 提权真机探针 | `pwsh ./rules/Probe-Elevated.ps1 -Probe All` | **通过**；SMART 读到型号/健康/温度 54℃/寿命 98%/通电 7269h；传感器读到 GPU Core 69℃ / Hot Spot 79.8℃ / SSD Composite 55℃ |
+| 提权真机探针（硬件） | `pwsh ./rules/Probe-Elevated.ps1 -Probe All` | **通过**；SMART 读到型号/健康/温度 54℃/寿命 98%/通电 7269h；传感器读到 GPU Core 69℃ / Hot Spot 79.8℃ / SSD Composite 55℃ |
+| 提权真机探针（M3/T3.5） | `obj/m3-probe`（cmd 中转提权，`Start-Process pwsh` 直拉会在 DISM 跑到 ~50s 时被以 `0xC000013A` 结束） | **通过**；`AnalyzeComponentStore` 解析出 10.04 GB / 5 个程序包 / 建议清理=是；compact 实测释放 1,079,040 字节且不删文件；保护路径（`C:\Windows`、`System32`、`Program Files`）全部 `Rejected`；门控半开为 `Disabled` |
 | CI | 推送 `dev` 触发 `.github/workflows/ci.yml` | **已触发，结果待观察**；`dotnet` job 去重后不再重复构建原生模块，`native` job 由 cmake 切换为 `Build-Native.ps1` |
 
 源码规模：约 145 个源文件；C# 侧最大文件仍在 300 行上限内。
 
 ### 11.3 下一步优先级建议
 
-**当前实施完成度**：M0 ✅ / M1 ✅ / M2 ✅ / M3 ~80%；**M4~M8 全部未开工**。
+**当前实施完成度**：M0 ✅ / M1 ✅ / M2 ✅ / M3 ✅；M4 ~75%；**M5~M8 未开工**。
 
 1. **M1 已完成**（截至 2026-09-23）：T1.1~T1.6 六项全部落地；入口 `dotnet build` / `dotnet test`（138 通过）/
    `Check-SourceFileSize.ps1`（EXIT=0）/ `Build-Native.ps1` 四项全绿。

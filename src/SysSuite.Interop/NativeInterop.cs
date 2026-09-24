@@ -118,6 +118,48 @@ public static class NativeInterop
         return NativeStatusText.FromCode(code);
     }
 
+    /// <summary>
+    /// MFT / USN 卷扫描（T3.2），按批次回传条目。
+    /// </summary>
+    /// <remarks>
+    /// 每批里的 <see cref="NativeFileEntry.Name"/> 只在回调期间有效，需要留存请先
+    /// <see cref="NativeFileEntry.ReadName"/>。这是原生侧零拷贝换来的：150 万条记录
+    /// 逐条交出所有权，分配开销会盖过扫描本身。
+    /// </remarks>
+    public static unsafe NativeStatus ScanVolumeEntries(
+        string volume,
+        NativeEntryBatchHandler onBatch,
+        Func<bool>? isCancelled = null)
+    {
+        if (string.IsNullOrWhiteSpace(volume))
+        {
+            return NativeStatus.InvalidArgument;
+        }
+
+        ArgumentNullException.ThrowIfNull(onBatch);
+
+        if (!EnsureLoaded(out var status))
+        {
+            return status;
+        }
+
+        NativeMethods.NativeCancelCheck? check = null;
+        if (isCancelled is not null)
+        {
+            check = _ => isCancelled() ? 1 : 0;
+        }
+
+        NativeMethods.NativeFileEntryCallback callback = (_, entries, count, _, _) =>
+            onBatch(new ReadOnlySpan<NativeFileEntry>(entries, (int)count)) ? 0 : 1;
+
+        var code = NativeMethods.ScanVolume2(volume, callback, IntPtr.Zero, check);
+
+        // 委托实例不能被 GC 回收，否则原生侧回调会跳进已回收的存根
+        GC.KeepAlive(callback);
+        GC.KeepAlive(check);
+        return NativeStatusText.FromCode(code);
+    }
+
     /// <summary>状态码描述，供 UI 与日志直接使用。</summary>
     public static string Describe(NativeStatus status) => NativeStatusText.Describe(status);
 

@@ -22,6 +22,12 @@ public sealed class AppSettings
 
     public bool EnableSystemSlimming { get; set; }
 
+    /// <summary>
+    /// 清理前创建系统还原点（T3.4）。默认关闭：需要管理员权限、耗时数十秒，
+    /// 且清理本身已有逐批备份（G7）。失败只降级为告警，绝不阻断清理。
+    /// </summary>
+    public bool CreateRestorePointBeforeClean { get; set; }
+
     public bool EnableDesktopOverlay { get; set; }
 
     public string UiLayout { get; set; } = "Sidebar";

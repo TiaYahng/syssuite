@@ -1,4 +1,5 @@
-﻿using SysSuite.Core.Abstractions.System;
+﻿using SysSuite.Core.Abstractions;
+using SysSuite.Core.Abstractions.System;
 using SysSuite.Core.System;
 using SysSuite.UI.Pages;
 
@@ -15,6 +16,7 @@ public sealed partial class CleanerViewModel : PageViewModelBase
 {
     private readonly IDiskInspectionService inspectionService;
     private readonly ICleanerInteractions interactions;
+    private readonly ISettingsService? settingsService;
 
     private readonly List<DriveOptionRow> driveRows = [];
     private readonly List<DiskCleanerRow> itemRows = [];
@@ -25,10 +27,14 @@ public sealed partial class CleanerViewModel : PageViewModelBase
     private CancellationTokenSource? cancellation;
     private DiskInspectionReport? report;
 
-    public CleanerViewModel(IDiskInspectionService inspectionService, ICleanerInteractions interactions)
+    public CleanerViewModel(
+        IDiskInspectionService inspectionService,
+        ICleanerInteractions interactions,
+        ISettingsService? settingsService = null)
     {
         this.inspectionService = inspectionService;
         this.interactions = interactions;
+        this.settingsService = settingsService;
     }
 
     /// <summary>扫描进度。Page 把它画到进度条与阶段文本上。</summary>
@@ -148,7 +154,8 @@ public sealed partial class CleanerViewModel : PageViewModelBase
         await RunBusyAsync(
             async () =>
             {
-                var result = await inspectionService.CleanAsync(report, selectedItems);
+                var wantRestorePoint = settingsService?.Current.CreateRestorePointBeforeClean == true;
+                var result = await inspectionService.CleanAsync(report, selectedItems, wantRestorePoint);
                 if (!result.IsSuccess || result.Value is null)
                 {
                     SetError(result.Message);
@@ -164,8 +171,16 @@ public sealed partial class CleanerViewModel : PageViewModelBase
                 SetStatus(
                     $"清理完成：成功 {cleanResult.DeletedCount}，失败 {cleanResult.FailedCount}，释放 {DiskCleanerFormat.Bytes(cleanResult.FreedBytes)}。"
                         + (cleanResult.Errors.Count > 0 ? $" 首个错误：{cleanResult.Errors[0]}" : string.Empty));
+
+                // 还原点的结果只在真尝试过时才说，否则会在每次清理后刷一条无意义的提示
+                if (!string.IsNullOrEmpty(cleanResult.RestorePointMessage))
+                {
+                    SetStatus(cleanResult.RestorePointMessage);
+                }
             },
-            "正在清理选中内容...");
+            settingsService?.Current.CreateRestorePointBeforeClean == true
+                ? "正在创建系统还原点并清理选中内容（还原点可能需要数十秒）..."
+                : "正在清理选中内容...");
     }
 
     public async Task RestoreLatestAsync()

@@ -11,6 +11,8 @@
     <PackageReference Include="Serilog.Sinks.File" />
     <PackageReference Include="System.Management" />
     <PackageReference Include="System.Drawing.Common" />
+    <!-- T3.5 读 dism.exe 输出：OEM 代码页解码，见 Directory.Packages.props 的说明。 -->
+    <PackageReference Include="System.Text.Encoding.CodePages" />
     <!-- T1.2 温度/风扇/电压传感器。HidSharp 是其运行时依赖（部分主板经 HID 上报）。 -->
     <PackageReference Include="LibreHardwareMonitorLib" />
     <PackageReference Include="HidSharp" />

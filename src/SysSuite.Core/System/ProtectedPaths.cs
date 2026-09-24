@@ -10,6 +10,12 @@ namespace SysSuite.Core.System;
 /// 2. **只读**：常量表本身不可被业务代码修改，避免"绕过白名单"的实现方式；
 /// 3. 前缀保护用于系统自有目录树，精确保护用于"容器型"目录（用户主目录、ProgramData），
 ///    后者只拒绝自身，否则会连正常的残留清理一并误伤。
+///
+/// 关于例外：早期实现把整棵 <c>Windows</c> 目录保护起来，导致清理规则里所有落在
+/// <c>Windows\Temp</c>、<c>Windows\SoftwareDistribution\Download</c> 的条目
+/// 「扫描得到、删除必失败」—— 规则集形同虚设（偏差 D21）。因此引入
+/// <see cref="CleanableRoots"/>：**只有在已确认落在保护树内之后**才检查例外，
+/// 且例外必须是保护根的子路径。段级红线（WinSxS / $Recycle.Bin 等）不参与例外。
 /// </remarks>
 public static class ProtectedPaths
 {
@@ -22,11 +28,35 @@ public static class ProtectedPaths
         "WinSxS",
     ];
 
+    /// <summary>
+    /// 相对 <c>Windows</c> 目录的可清理缓存子路径。
+    /// 每一项都必须是 <see cref="Roots"/> 中某个根的**真子路径**，否则不生成例外 ——
+    /// 宁可少清一项，也不接受一条能越过保护根的例外。
+    ///
+    /// 声明位置必须在 <see cref="CleanableRoots"/> 之前：静态字段按声明顺序初始化，
+    /// 反了会在类型初始化期拿到 null。
+    /// </summary>
+    private static readonly string[] CleanableRelativePaths =
+    [
+        "Temp",
+        "SoftwareDistribution\\Download",
+        "SoftwareDistribution\\DeliveryOptimization",
+        "Logs",
+        "ServiceProfiles\\LocalService\\AppData\\Local\\FontCache",
+        "System32\\Dns",
+    ];
+
     /// <summary>整棵目录树受保护的根（含根自身）。</summary>
     public static IReadOnlyList<string> Roots { get; } = BuildRoots();
 
     /// <summary>仅目录自身受保护、子目录不保护的根。</summary>
     public static IReadOnlyList<string> ExactOnlyRoots { get; } = BuildExactOnlyRoots();
+
+    /// <summary>
+    /// 保护树内允许清理的缓存目录（<see cref="Roots"/> 的子路径）。
+    /// 这些目录由 Windows 自身在需要时重建，删除其中内容不会破坏系统。
+    /// </summary>
+    public static IReadOnlyList<string> CleanableRoots { get; } = BuildCleanableRoots();
 
     /// <summary>判断路径是否位于保护范围内；无法判定时返回 true。</summary>
     public static bool IsProtected(string? path)
@@ -78,12 +108,13 @@ public static class ProtectedPaths
             }
         }
 
-        foreach (var candidate in Roots)
+        // 先确认落在保护树内，再判例外 —— 顺序不能反：否则一条配错的例外就能凭空放行任意路径
+        var matchedRoot = Roots.FirstOrDefault(candidate => IsUnder(fullPath, candidate));
+        if (matchedRoot is not null)
         {
-            if (IsUnder(fullPath, candidate))
-            {
-                return candidate;
-            }
+            return CleanableRoots.Any(candidate => IsUnder(fullPath, candidate))
+                ? null
+                : matchedRoot;
         }
 
         foreach (var candidate in ExactOnlyRoots)
@@ -117,6 +148,36 @@ public static class ProtectedPaths
         Add(roots, Environment.GetFolderPath(Environment.SpecialFolder.SystemX86));
         Add(roots, Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles));
         Add(roots, Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86));
+        return roots;
+    }
+
+    private static List<string> BuildCleanableRoots()
+    {
+        var roots = new List<string>();
+        var windows = Environment.GetFolderPath(Environment.SpecialFolder.Windows);
+        if (string.IsNullOrWhiteSpace(windows))
+        {
+            return roots;
+        }
+
+        foreach (var relative in CleanableRelativePaths)
+        {
+            var candidate = Path.Combine(windows, relative);
+            // 例外不得落回段级红线（WinSxS 等），也不得与保护根自身相等
+            var segments = candidate.Split(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+            if (segments.Any(segment => ProtectedSegments.Contains(segment, StringComparer.OrdinalIgnoreCase)))
+            {
+                continue;
+            }
+
+            if (Roots.Any(root => string.Equals(candidate, root, StringComparison.OrdinalIgnoreCase)))
+            {
+                continue;
+            }
+
+            Add(roots, candidate);
+        }
+
         return roots;
     }
 

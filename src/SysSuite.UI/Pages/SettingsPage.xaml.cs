@@ -33,6 +33,15 @@ public partial class SettingsPage : UserControl, IDisposable
         WatchdogAutoStartCheckBox.IsChecked = viewModel.WatchdogAutoStart;
         ExperimentalFeaturesCheckBox.IsChecked = viewModel.EnableExperimentalFeatures;
         ForceDeleteCheckBox.IsChecked = viewModel.EnableForceDelete;
+        RestorePointCheckBox.IsChecked = viewModel.CreateRestorePointBeforeClean;
+        SystemSlimmingCheckBox.IsChecked = viewModel.EnableSystemSlimming;
+
+        // 系统还原被策略关闭时，复选框置灰 + 给出原因，而不是让人点一个永不生效的开关
+        RestorePointCheckBox.IsEnabled = viewModel.IsSystemRestoreAvailable;
+        RestorePointUnavailableText.Visibility = viewModel.IsSystemRestoreAvailable
+            ? Visibility.Collapsed
+            : Visibility.Visible;
+
         viewModel.MarkInitialized();
 
         Loaded += OnLoaded;
@@ -61,6 +70,12 @@ public partial class SettingsPage : UserControl, IDisposable
 
     private void OnForceDeleteChanged(object sender, RoutedEventArgs args)
         => viewModel.SetForceDelete(ForceDeleteCheckBox.IsChecked == true);
+
+    private void OnRestorePointChanged(object sender, RoutedEventArgs args)
+        => viewModel.SetCreateRestorePointBeforeClean(RestorePointCheckBox.IsChecked == true);
+
+    private void OnSystemSlimmingChanged(object sender, RoutedEventArgs args)
+        => viewModel.SetSystemSlimming(SystemSlimmingCheckBox.IsChecked == true);
 
     private void OnUpdateModeChecked(object sender, RoutedEventArgs args)
     {

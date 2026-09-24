@@ -9,11 +9,13 @@ using IoDriveInfo = System.IO.DriveInfo;
 
 namespace SysSuite.Core.System;
 
-public sealed partial class DiskInspectionService : IDiskInspectionService
+public sealed partial class DiskInspectionService : IDiskInspectionService, IDisposable
 {
     private const long MinimumDuplicateSize = 1024 * 1024;
     private readonly ISharedDatabaseService? databaseService;
     private readonly string backupRoot;
+    private readonly CleanRuleProvider ruleProvider;
+    private bool disposed;
 
     public DiskInspectionService(ISharedDatabaseService? databaseService = null)
     {
@@ -21,6 +23,19 @@ public sealed partial class DiskInspectionService : IDiskInspectionService
         backupRoot = Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
             "SysSuite", "clean-backups");
+        ruleProvider = new CleanRuleProvider(Path.Combine(AppContext.BaseDirectory, "rules", "clean-temp.json"));
+    }
+
+    public void Dispose()
+    {
+        if (disposed)
+        {
+            return;
+        }
+
+        disposed = true;
+        ruleProvider.Dispose();
+        GC.SuppressFinalize(this);
     }
     private const int PartialHashLength = 64 * 1024;
     private const int MaximumErrorMessages = 20;
@@ -119,6 +134,7 @@ public sealed partial class DiskInspectionService : IDiskInspectionService
                 var items = concurrentItems.ToList();
                 AddLargeFileItems(files, items, cancellationToken);
                 FindTempItems(roots, items, tracker, cancellationToken);
+                FindRecycleBinItems(roots, items, tracker);
                 var duplicateCandidates = files
                     .GroupBy(file => file.Length)
                     .Where(group => group.Count() > 1)
@@ -144,53 +160,6 @@ public sealed partial class DiskInspectionService : IDiskInspectionService
                 Thread.CurrentThread.Priority = ThreadPriority.Normal;
             }
         }, cancellationToken, TaskCreationOptions.LongRunning, TaskScheduler.Default);
-    }
-
-    private static DriveOption CreateDriveOption(IoDriveInfo drive)
-    {
-        var totalBytes = 0L;
-        var freeBytes = 0L;
-        var isReady = drive.IsReady;
-        if (isReady)
-        {
-            try
-            {
-                totalBytes = drive.TotalSize;
-                freeBytes = drive.AvailableFreeSpace;
-            }
-            catch (IOException)
-            {
-                isReady = false;
-            }
-        }
-
-        return new DriveOption(
-            drive.Name,
-            Path.GetFullPath(drive.Name),
-            totalBytes,
-            freeBytes,
-            IsSystemDrive(drive.Name),
-            isReady);
-    }
-
-    private static bool IsSystemDrive(string driveName)
-    {
-        var systemRoot = Path.GetPathRoot(Environment.SystemDirectory);
-        var targetRoot = Path.GetPathRoot(driveName);
-        return !string.IsNullOrEmpty(systemRoot)
-            && !string.IsNullOrEmpty(targetRoot)
-            && string.Equals(systemRoot, targetRoot, StringComparison.OrdinalIgnoreCase);
-    }
-
-    private static List<DirectoryInfo> NormalizeRoots(IReadOnlyList<string> driveRoots)
-    {
-        return driveRoots
-            .Where(root => !string.IsNullOrWhiteSpace(root))
-            .Select(Path.GetFullPath)
-            .Distinct(StringComparer.OrdinalIgnoreCase)
-            .Select(root => new DirectoryInfo(root))
-            .Where(root => root.Exists && !root.Attributes.HasFlag(FileAttributes.ReparsePoint))
-            .ToList();
     }
 
     private static void InspectRoot(

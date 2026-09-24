@@ -18,7 +18,8 @@ public sealed record CleanResult(
     int DeletedCount,
     int FailedCount,
     long FreedBytes,
-    IReadOnlyList<string> Errors);
+    IReadOnlyList<string> Errors,
+    string RestorePointMessage = "");
 
 public interface ICleanerService
 {
@@ -93,9 +94,13 @@ public interface IDiskInspectionService
         IProgress<DiskScanProgress>? progress = null,
         CancellationToken cancellationToken = default);
 
+    /// <param name="createRestorePoint">
+    /// 清理前是否创建系统还原点（T3.4）。创建失败只降级为告警，不影响清理执行。
+    /// </param>
     Task<Result<CleanResult>> CleanAsync(
         DiskInspectionReport report,
         IEnumerable<CleanItem> items,
+        bool createRestorePoint = false,
         CancellationToken cancellationToken = default);
 
     Task<Result<CleanResult>> RestoreLatestAsync(CancellationToken cancellationToken = default);

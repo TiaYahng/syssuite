@@ -6,6 +6,7 @@
             <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
             <RowDefinition Height="*" />
         </Grid.RowDefinitions>
 
@@ -63,7 +64,42 @@
             </Grid>
         </Border>
 
-        <Grid Grid.Row="3">
+        <!-- M3 T3.5 系统瘦身（L2 实验性）。默认折叠，且未在设置页开启时整块隐藏。 -->
+        <Expander x:Name="SlimmingExpander" Grid.Row="3" Margin="0,0,0,6" Visibility="Collapsed"
+                  Background="{DynamicResource App.Surface}" BorderBrush="{DynamicResource App.Border}" BorderThickness="1"
+                  Header="系统瘦身（实验性 L2）" Foreground="{DynamicResource App.Text}">
+            <StackPanel Margin="10,6,10,10">
+                <TextBlock x:Name="SlimmingAvailabilityText" TextWrapping="Wrap" Foreground="{DynamicResource App.CautionText}" />
+
+                <StackPanel Orientation="Horizontal" Margin="0,6,0,0">
+                    <Button x:Name="SlimmingAnalyzeButton" Width="72" Height="28" Margin="0,0,8,0" Click="OnSlimmingAnalyzeClick">分析</Button>
+                    <Button x:Name="SlimmingCleanupButton" Width="112" Height="28" Margin="0,0,8,0" Background="{DynamicResource App.Accent}"
+                            Foreground="{DynamicResource App.AccentText}" BorderThickness="0" Click="OnSlimmingCleanupClick">清理组件存储</Button>
+                    <CheckBox x:Name="SlimmingResetBaseCheckBox" Content="/ResetBase" VerticalAlignment="Center" Margin="0,0,12,0"
+                              Checked="OnSlimmingResetBaseChanged" Unchecked="OnSlimmingResetBaseChanged" />
+                    <Button x:Name="SlimmingCompactButton" Width="96" Height="28" Margin="0,0,8,0" Click="OnSlimmingCompactClick">压缩目录…</Button>
+                    <CheckBox x:Name="SlimmingExecutableOnlyCheckBox" Content="仅可执行文件" IsChecked="True" VerticalAlignment="Center" Margin="0,0,12,0"
+                              Checked="OnSlimmingExecutableOnlyChanged" Unchecked="OnSlimmingExecutableOnlyChanged" />
+                    <Button x:Name="SlimmingExportLogButton" Width="88" Height="28" Click="OnSlimmingExportLogClick">导出日志</Button>
+                </StackPanel>
+
+                <!-- /ResetBase 的常驻红字警告：勾上就必须一直看得见，不能只靠一次确认框 -->
+                <TextBlock x:Name="SlimmingResetBaseWarningText" TextWrapping="Wrap" Margin="0,8,0,0"
+                           Visibility="Collapsed" Foreground="{DynamicResource App.RiskyText}" />
+
+                <TextBlock Text="当前占用" Margin="0,10,0,0" FontWeight="SemiBold" Foreground="{DynamicResource App.Text}" />
+                <TextBlock x:Name="SlimmingReportText" TextWrapping="Wrap" Margin="0,4,0,0"
+                           Foreground="{DynamicResource App.SubtleText}" />
+
+                <TextBlock Text="最近一次操作日志" Margin="0,10,0,0" FontWeight="SemiBold" Foreground="{DynamicResource App.Text}" />
+                <TextBox x:Name="SlimmingLogBox" Margin="0,4,0,0" Height="150" IsReadOnly="True" TextWrapping="NoWrap"
+                         AcceptsReturn="True" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto"
+                         FontFamily="Consolas" FontSize="11" Background="{DynamicResource App.Background}"
+                         Foreground="{DynamicResource App.SubtleText}" BorderBrush="{DynamicResource App.Border}" />
+            </StackPanel>
+        </Expander>
+
+        <Grid Grid.Row="4">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="190" />
                 <ColumnDefinition Width="10" />

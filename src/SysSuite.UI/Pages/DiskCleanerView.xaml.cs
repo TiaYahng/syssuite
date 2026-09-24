@@ -5,6 +5,7 @@ using System.Windows.Controls;
 using System.Windows.Documents;
 using System.Windows.Media;
 using Microsoft.Extensions.DependencyInjection;
+using SysSuite.Core.Abstractions;
 using SysSuite.Core.Abstractions.System;
 using SysSuite.UI.ViewModels;
 
@@ -26,12 +27,15 @@ public partial class DiskCleanerView : UserControl, IDisposable
         var services = ((App)Application.Current).Services;
         viewModel = new CleanerViewModel(
             services.GetRequiredService<IDiskInspectionService>(),
-            new CleanerInteractions());
+            new CleanerInteractions(),
+            services.GetService<ISettingsService>());
         viewModel.StatusChanged += OnStatusChanged;
         viewModel.ListsChanged += OnListsChanged;
         viewModel.PropertyChanged += OnViewModelPropertyChanged;
         Loaded += OnLoaded;
         Unloaded += OnUnloaded;
+
+        InitializeSlimming(services);
     }
 
     private async void OnLoaded(object sender, RoutedEventArgs args) => await viewModel.ActivateAsync();
@@ -44,6 +48,7 @@ public partial class DiskCleanerView : UserControl, IDisposable
         viewModel.ListsChanged -= OnListsChanged;
         viewModel.PropertyChanged -= OnViewModelPropertyChanged;
         viewModel.Dispose();
+        DisposeSlimming();
         GC.SuppressFinalize(this);
     }
 

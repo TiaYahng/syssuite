@@ -166,7 +166,8 @@ $common = @(
     (Join-Path $nativeDir 'src/native_smart.cpp'),
     (Join-Path $nativeDir 'src/native_smart_common.cpp'),
     (Join-Path $nativeDir 'src/native_smart_ata.cpp'),
-    (Join-Path $nativeDir 'src/native_smart_nvme.cpp')
+    (Join-Path $nativeDir 'src/native_smart_nvme.cpp'),
+    (Join-Path $nativeDir 'src/native_volume.cpp')
 )
 
 if ($Configuration -eq 'Debug') {

@@ -2,9 +2,14 @@
   {
     "id": "windows-temp",
     "target": "{root}\\Windows\\Temp",
-    "env": ["WINDIR"],
+    "env": [
+      "WINDIR"
+    ],
     "regex": ".*",
-    "exclude": ["\\\\(Low|Package Cache)\\\\", "\\Windows\\\\WinSxS"],
+    "exclude": [
+      "\\\\(Low|Package Cache)\\\\",
+      "\\Windows\\\\WinSxS"
+    ],
     "minAgeDays": 1,
     "level": "safe"
   },
@@ -29,7 +34,10 @@
   {
     "id": "user-temp",
     "target": "{root}\\Users\\*\\AppData\\Local\\Temp",
-    "env": ["TEMP", "TMP"],
+    "env": [
+      "TEMP",
+      "TMP"
+    ],
     "regex": ".*",
     "exclude": [],
     "minAgeDays": 1,
@@ -79,5 +87,52 @@
     "exclude": [],
     "minAgeDays": 7,
     "level": "caution"
+  },
+  {
+    "id": "update-download",
+    "target": "{root}\\Windows\\SoftwareDistribution\\Download",
+    "env": [],
+    "regex": ".*",
+    "exclude": [],
+    "minAgeDays": 3,
+    "level": "caution"
+  },
+  {
+    "id": "delivery-optimization",
+    "target": "{root}\\Windows\\SoftwareDistribution\\DeliveryOptimization",
+    "env": [],
+    "regex": ".*",
+    "exclude": [],
+    "minAgeDays": 3,
+    "level": "caution"
+  },
+  {
+    "id": "log-files",
+    "target": "{root}\\Windows\\Logs",
+    "env": [],
+    "regex": ".*\\.(log|etl|cab)$",
+    "exclude": [
+      "\\\\CBS\\\\CbsPersist_.*"
+    ],
+    "minAgeDays": 7,
+    "level": "caution"
+  },
+  {
+    "id": "font-cache",
+    "target": "{root}\\Windows\\ServiceProfiles\\LocalService\\AppData\\Local\\FontCache",
+    "env": [],
+    "regex": ".*\\.dat$",
+    "exclude": [],
+    "minAgeDays": 1,
+    "level": "caution"
+  },
+  {
+    "id": "dns-cache",
+    "target": "{root}\\Windows\\System32\\Dns",
+    "env": [],
+    "regex": ".*\\.dns$",
+    "exclude": [],
+    "minAgeDays": 0,
+    "level": "risky"
   }
 ]

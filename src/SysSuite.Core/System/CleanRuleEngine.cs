@@ -24,24 +24,51 @@ public sealed class CleanRuleEngine
 {
     private static readonly JsonSerializerOptions JsonOptions = new() { PropertyNameCaseInsensitive = true, Converters = { new JsonStringEnumConverter() } };
 
-    public static IReadOnlyList<ValidatedCleanRule> Load(string filePath)
+    public static IReadOnlyList<ValidatedCleanRule> Load(string filePath) => Load(filePath, out _);
+
+    /// <summary>
+    /// 加载规则文件。<paramref name="rejectedIds"/> 回填被丢弃的规则 id。
+    /// </summary>
+    /// <remarks>
+    /// 被拒 id 必须回传而不是静默跳过：一条正则写错（例如 JSON 里少一层反斜杠转义）
+    /// 会让整条规则消失得无声无息，界面上只表现为"这条规则从来没命中过"，
+    /// 排查时极容易误判成"目标目录里没东西"。
+    /// </remarks>
+    public static IReadOnlyList<ValidatedCleanRule> Load(string filePath, out IReadOnlyList<string> rejectedIds)
     {
+        rejectedIds = [];
         if (!File.Exists(filePath))
         {
             return [];
         }
 
-        var rules = JsonSerializer.Deserialize<List<CleanRule>>(File.ReadAllText(filePath), JsonOptions) ?? [];
+        List<CleanRule> rules;
+        try
+        {
+            rules = JsonSerializer.Deserialize<List<CleanRule>>(File.ReadAllText(filePath), JsonOptions) ?? [];
+        }
+        catch (JsonException)
+        {
+            return [];
+        }
+
         var result = new List<ValidatedCleanRule>(rules.Count);
         var ids = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var rejected = new List<string>();
         foreach (var rule in rules)
         {
             if (!Validate(rule, ids, out var validated))
             {
+                rejected.Add(string.IsNullOrWhiteSpace(rule?.Id) ? "(无 id)" : rule.Id);
                 continue;
             }
 
             result.Add(validated!);
+        }
+
+        if (rejected.Count > 0)
+        {
+            rejectedIds = rejected;
         }
 
         return result;

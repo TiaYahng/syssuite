@@ -45,6 +45,37 @@
                 </Grid>
             </Border>
 
+            <!-- M3 T3.4 清理前系统还原点 -->
+            <Border Margin="0,12,0,0" Padding="16" Background="{DynamicResource App.Background}" BorderBrush="{DynamicResource App.Border}" BorderThickness="1" CornerRadius="6">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <StackPanel>
+                        <TextBlock Text="清理前创建系统还原点" Foreground="{DynamicResource App.Text}" />
+                        <TextBlock Text="默认关闭。需要管理员权限且可能耗时数十秒；同一台机器每天只建一个。创建失败不影响清理。" Foreground="{DynamicResource App.SubtleText}" TextWrapping="Wrap" />
+                        <TextBlock x:Name="RestorePointUnavailableText" Text="当前系统还原已被组策略关闭，此选项不会生效。" Foreground="{DynamicResource App.CautionText}" TextWrapping="Wrap" Visibility="Collapsed" />
+                    </StackPanel>
+                    <CheckBox x:Name="RestorePointCheckBox" Grid.Column="1" Checked="OnRestorePointChanged" Unchecked="OnRestorePointChanged" />
+                </Grid>
+            </Border>
+
+            <!-- M3 T3.5 系统瘦身（L2 实验性） -->
+            <Border Margin="0,12,0,0" Padding="16" Background="{DynamicResource App.Background}" BorderBrush="{DynamicResource App.Border}" BorderThickness="1" CornerRadius="6">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <StackPanel>
+                        <TextBlock Text="系统瘦身（实验性 L2）" Foreground="{DynamicResource App.Text}" />
+                        <TextBlock Text="组件存储清理（DISM）与按文件压缩。需同时打开上方的「实验性功能」；写入动作还需管理员权限。/ResetBase 会使已安装的更新无法卸载。" Foreground="{DynamicResource App.SubtleText}" TextWrapping="Wrap" />
+                    </StackPanel>
+                    <CheckBox x:Name="SystemSlimmingCheckBox" Grid.Column="1" Checked="OnSystemSlimmingChanged" Unchecked="OnSystemSlimmingChanged" />
+                </Grid>
+            </Border>
+
             <!-- M4 T4.1 更新控制 -->
             <Border Margin="0,20,0,0" Padding="16" Background="{DynamicResource App.Background}" BorderBrush="{DynamicResource App.Border}" BorderThickness="1" CornerRadius="6">
                 <StackPanel>
